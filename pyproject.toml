@@ -5,12 +5,92 @@ description     = "ZEB Policy"
 readme          = "README.md"
 requires-python = ">=3.14"
 authors         = [{ name = "beskep", email = "beskep@naver.com" }]
-dependencies    = []
+dependencies    = [
+  "cyclopts>=4.16.1",
+  "eco2",
+  "more-itertools>=11.1.0",
+  "msgspec>=0.21.1",
+  "numpy>=2.4.6",
+  "pingouin>=0.6.1",
+  "pint>=0.25.3",
+]
+
+[dependency-groups]
+dev       = [
+  "lxml>=6.1.1",
+  "pytest>=9.0.3",
+  "ruff>=0.15.15",
+  "ty>=0.0.42",
+]
+dataframe = [
+  "fastexcel>=0.20.2",
+  "polars>=1.41.2",
+  "pyarrow>=24.0.0",
+  "xlsxwriter>=3.2.9",
+]
+plot      = [
+  "cmap>=0.7.2",
+  "matplotlib>=3.10.9",
+  "seaborn>=0.13.2",
+]
+roadmap   = [
+  "loguru>=0.7.3",
+  "pydash>=8.0.6",
+  "salib>=1.5.2",
+  "scikit-learn>=1.8.0",
+]
 
 [build-system]
 requires      = ["uv_build>=0.11.17,<0.12.0"]
 build-backend = "uv_build"
 
-[tool.tombi.format.rules]
+[tool.ruff]
+preview       = true
+output-format = "concise"
+
+[tool.ruff.format]
+quote-style           = "single"
+docstring-code-format = true
+
+[tool.ruff.lint]
+exclude = ["zeb/utils/**"]
+select  = ["ALL"]
+ignore  = [
+  "ANN",                    # flake8-annotations
+  "COM",                    # flake8-commas
+  "CPY",                    # flake8-copyright
+  "D1",                     # pydocstyle: D1*
+  "FIX",                    # flake8-fixme
+  "Q",                      # flake8-quotes
+  "S",                      # flake8-bandit
+  "T20",                    # flake8-print
+  "TD",                     # flake8-todos
+]
+
+[tool.ruff.lint.pydoclint]
+ignore-one-line-docstrings = true
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.tombi.files]
+exclude = ["src/zeb/utils/**"]
+
+[[tool.tombi.overrides]]
+files.include = ["*.toml"]
+
+[tool.tombi.overrides.format.rules]
 key-value-equals-sign-alignment = true
 trailing-comment-alignment      = true
+
+[tool.ty.src]
+exclude = ["src/zeb/utils/**", "**/roadmap/**", "**/y2025/**"]
+
+[tool.ty.terminal]
+output-format = "concise"
+
+[tool.uv]
+default-groups = ["dev", "dataframe", "plot"]
+
+[tool.uv.sources]
+eco2 = { git = "https://github.com/beskep/ECO2" }
