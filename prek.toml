@@ -1,0 +1,40 @@
+#:schema https://www.schemastore.org/prek.json
+
+[[repos]]
+repo  = "builtin"
+hooks = [
+  { id = "trailing-whitespace" },
+  { id = "end-of-file-fixer" },
+  { id = "check-added-large-files" },
+]
+
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id       = "ruff-check"
+name     = "ruff check"
+entry    = "ruff check --fix"
+language = "system"
+types_or = ["python", "pyi", "jupyter"]
+
+[[repos.hooks]]
+id       = "ruff-format"
+name     = "ruff format"
+entry    = "ruff format"
+language = "system"
+types_or = ["python", "pyi", "jupyter"]
+
+[[repos.hooks]]
+id       = "tombi-format"
+name     = "tombi format"
+entry    = "tombi format"
+language = "system"
+files    = '\.toml$'
+
+[[repos.hooks]]
+id             = "topiary-format-nushell"
+name           = "topiary format nushell"
+entry          = "nu -l -c 'try { topiary format **/*.nu }'"
+language       = "system"
+pass_filenames = false
