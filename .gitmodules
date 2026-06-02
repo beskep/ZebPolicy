@@ -1,0 +1,3 @@
+[submodule "src/zeb/utils"]
+	path = src/zeb/utils
+	url = https://github.com/beskep/utils
