@@ -165,7 +165,7 @@ def prep_to_polars():
             # numeric
             (cs.matches('면적') & cs.string())
             .str.strip_chars()
-            .str.replace(r'(\d+)\.(\d*\.\d*)', f'${1}${2}')  # XXX
+            .str.replace(r'(\d+)\.(\d*\.\d*)', '${1}${2}')
             .cast(pl.Float64, strict=False),
             _cast_percent(
                 cs.contains(
@@ -280,7 +280,6 @@ def prep(*, xlsx: bool = False, filter_cert_duration: bool = False):
 @app.command
 def join_srr():
     """2024-07-29 ZEB등급, 자립률 join."""
-    # XXX
     conf = Config.read()
     root = conf.dirs.prep
     src = root / f'{conf.source.stem}.parquet'
@@ -361,7 +360,6 @@ def eda_count():
 
 @app_eda.command
 def eda_describe_area(*, filter_cert_duration: bool = False):
-    # XXX Dataset 사용 수정
     conf = Config.read()
     use = '건물용도'
     df = (
@@ -646,5 +644,3 @@ if __name__ == '__main__':
     utils.mpl.MplTheme().grid().apply()
 
     app()
-
-    # TODO 인증번호 unique 체크

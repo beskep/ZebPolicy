@@ -187,7 +187,7 @@ class SensitivityAnalysis:
         )
 
         if self.max_y is not None:
-            lf = lf.filter(pl.col('value') < self.max_y)  # XXX
+            lf = lf.filter(pl.col('value') < self.max_y)
 
         df = (
             lf
@@ -297,7 +297,6 @@ def sensitivity(
     y: str | None = None,
     max_y: float | None = None,
 ):
-    # TODO sobol, ...
     root = get_root() / REPORT_DIR
 
     m = {'beta': '표준회귀계수', 'rf': '특성중요도'}[method]

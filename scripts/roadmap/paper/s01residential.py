@@ -74,7 +74,6 @@ def prep(
     complex_labels = [f'C{i + 1}' for i in range(len(complex_breaks) + 1)]
     household_labels = [f'A{i + 1}' for i in range(len(household_breaks) + 1)]
 
-    # TODO cast 에너지요구량, ...
     data = (
         pl
         .read_excel(source)
@@ -245,7 +244,6 @@ class ReprCase:
             case 'mean':
                 values = values.fill_null(strategy='mean')
             case 'median':
-                # FIXME
                 values = values.fill_null(pl.all().median())
 
         scaler = skp.StandardScaler() if self.method == 'param' else skp.RobustScaler()

@@ -406,7 +406,7 @@ def analyse_prep_sensitivity(
         .filter(
             pl.col('인증구분') == '예비인증',
             pl.col('건물용도') == '주거용 이외',
-            pl.col('인증신청일') >= pl.date(2020, 1, 1),  # XXX
+            pl.col('인증신청일') >= pl.date(2020, 1, 1),
         )
         .with_columns(breaks.cut(pl.col('연면적'), breaks='area').alias('면적구간'))
     )
@@ -1053,5 +1053,3 @@ if __name__ == '__main__':
 
     LogHandler.set()
     app()
-
-    # TODO 바닥_열관류율 이상치 처리?

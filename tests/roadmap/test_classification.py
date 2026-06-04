@@ -47,6 +47,3 @@ def test_breaks_area(breaks: list[float], data: list[float], labels: list[str]):
     ).to_list()
 
     assert labels_ == labels
-
-
-# TODO test region

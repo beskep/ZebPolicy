@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from collections.abc import Collection
 
 
-SALibMethod = Literal['sobol']  # TODO 분석 방법 추가
+SALibMethod = Literal['sobol']
 
 
 class NotCalculatedError(ValueError):
