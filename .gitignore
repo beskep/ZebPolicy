@@ -12,5 +12,6 @@ wheels/
 # Project
 bin/
 .vscode/
+env.toml
 .*.toml
 *.xlsx
