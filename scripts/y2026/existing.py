@@ -3,6 +3,7 @@
 import dataclasses as dc
 import enum
 import functools
+from typing import Literal
 
 import cyclopts
 import polars as pl
@@ -19,17 +20,18 @@ app = App(
         root_keys='2026',
         allow_unknown=True,
         use_commands_as_keys=False,
-    ),
-    result_action=['call_if_callable', 'print_non_none_return_zero'],
+    )
 )
 
 
 class V(enum.StrEnum):
     GFA = '연면적'
-    HT = '온열원설비_난방방식'
+    HM = '온열원설비_난방방식'
+    HT = '온열원설비_적용기기'
     HF = '온열원설비_사용연료'
     HE = '온열원설비_효율'
-    CT = '냉열원설비_냉방방식'
+    CM = '냉열원설비_냉방방식'
+    CT = '냉열원설비_적용기기'
     CF = '냉열원설비_사용연료'
     CE = '냉열원설비_효율'
     L = '조명설비_주거실조명전력(W/㎡)'
@@ -61,7 +63,7 @@ def prep(paths: Paths):
             .str.replace_all(',', '')
             .replace('', None)
             .cast(pl.Float64),
-            # 온열원 효율 (% 표기 포함)
+            # 온열원 효율 (% 표기 처리)
             (
                 pl
                 .col(V.HE)
@@ -97,34 +99,16 @@ class Eda:
 
     @functools.cached_property
     def data(self):
-        return (
-            self.raw
-            .filter(
-                pl.col('인증구분') == '예비인증',
-                pl.col('건물용도') == '주거용 이외',
-                pl.col('인증년도').is_in([2010, 2011]),
-            )
-            .with_columns(type=pl.format('{}&{}', V.HT, V.CT))
-            .with_columns(
-                pl
-                .when(pl.col(V.HF).is_in(['액화가스', '천연가스']))
-                .then(pl.col(V.HE))
-                .otherwise(pl.lit(None))
-                .alias(V.HE),
-                pl
-                .when(pl.col(V.CF).is_in(['액화가스', '천연가스']))
-                .then(pl.col(V.CE))
-                .otherwise(pl.lit(None))
-                .alias(V.CE),
-            )
-            .collect()
-        )
+        return self.raw.filter(
+            pl.col('인증구분') == '예비인증',
+            pl.col('건물용도') == '주거용 이외',
+            pl.col('인증년도').is_in([2010, 2011]),
+        ).collect()
 
     def describe(self):
         for df, suffix in (
             (self.raw, '-raw'),
             (self.data, '-filtered'),
-            (self.data.select(list(V)), ''),
         ):
             (
                 df
@@ -136,16 +120,39 @@ class Eda:
                 )
             )
 
-    def plot(self):
-        data = self.data.select('연면적', V.HE, V.CE, V.L, 'type')
-        grid = sns.pairplot(data.to_pandas(), hue='type', diag_kind='hist')
-        grid.savefig(self.paths.existing / '03.grid.png')
+        for name, v in (('난방설비', V.HT), ('냉방설비', V.CT)):
+            (
+                (utils.pl)
+                .PolarsSummary(
+                    self.data.select(list(V)), group=v, interpolation='linear'
+                )
+                .write_excel(
+                    self.paths.existing / f'02.describe-group-{name}.xlsx',
+                    column_widths=150,
+                )
+            )
+
+    def plot(self, v: Literal['heating', 'cooling']):
+        match v:
+            case 'heating':
+                t = V.HT
+                e = V.HE
+            case 'cooling':
+                t = V.CT
+                e = V.CE
+
+        data = self.data.select('연면적', t, e, V.L).sort(t)
+        grid = sns.pairplot(
+            data.to_pandas(), hue=t, diag_kind='hist', plot_kws={'alpha': 0.8}
+        )
+        grid.savefig(self.paths.existing / f'03.grid-{v}.png')
 
     def __call__(self):
         self.describe()
 
         utils.mpl.MplTheme().grid().apply()
-        self.plot()
+        self.plot('heating')
+        self.plot('cooling')
 
         return self.data
 
