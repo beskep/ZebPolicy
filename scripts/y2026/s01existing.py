@@ -17,8 +17,7 @@ from zeb.y2026.config import Paths  # noqa: TC001
 app = App(
     config=cyclopts.config.Toml(
         'env.toml',
-        root_keys='2026',
-        allow_unknown=True,
+        root_keys=['2026', 'paths'],
         use_commands_as_keys=False,
     )
 )

@@ -5,6 +5,8 @@ from pathlib import Path  # noqa: TC003
 @dc.dataclass
 class Paths:
     root: Path
+    eco2: Path  # ECO2 파일 저장, 연산 경로
+
     raw: Path
     existing: Path
 

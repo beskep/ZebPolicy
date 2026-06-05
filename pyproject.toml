@@ -13,6 +13,7 @@ dependencies    = [
   "numpy>=2.4.6",
   "pingouin>=0.6.1",
   "pint>=0.25.3",
+  "structlog>=25.5.0",
 ]
 
 [dependency-groups]
