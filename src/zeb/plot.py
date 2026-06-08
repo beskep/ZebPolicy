@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from matplotlib.axes import Axes
 
 
-def _category(data: pd.DataFrame, x: str, y: str):
+def _category(data: pd.DataFrame, x: str, y: str) -> str:
     xy = (x, y)
     dtypes = [variable_type(data[v]) for v in xy]
 
