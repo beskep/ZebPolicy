@@ -28,17 +28,17 @@ app = App(
 logger = structlog.stdlib.get_logger()
 
 
-def _remove_renewable(src: Path, *, pv_only: bool = False):
-    eco = editor.Eco2Editor(src)
+def _remove_renewable(src: str | Path | editor.Eco2Xml, *, pv_only: bool = False):
+    eco = editor.Eco2Xml.read(src) if isinstance(src, str | Path) else src
 
-    for element in tuple(eco.xml.iterfind('tbl_new')):
+    for element in tuple(eco.iterfind('tbl_new')):
         if element.findtext('code') == '0':
             continue
 
         if pv_only and element.findtext('기기종류') != '태양광':
             continue
 
-        eco.xml.ds.remove(element)
+        eco.ds.remove(element)
 
     return eco
 
@@ -56,36 +56,41 @@ class Copy:
     non_residential: Path
     paths: Paths
 
-    grade_pattern: re.Pattern = dc.field(init=False)
+    p_grade: re.Pattern = dc.field(init=False)
+    p_region: re.Pattern = dc.field(init=False)
 
     def __post_init__(self):
-        self.grade_pattern = re.compile(r'((ZEB[+1-5])|Base|Existing)')
+        self.p_grade = re.compile(r'((ZEB[+1-5])|Base|Existing|NOPV)')
+        self.p_region = re.compile(r'(중부[12]|남부|제주)')
 
     @functools.cached_property
     def dst(self):
         return self.paths.eco2
 
-    def grade(self, path: Path):
-        if not (m := self.grade_pattern.search(path.name)):
-            raise ValueError(path)
+    def case(self, name: str):
+        if not (g := self.p_grade.search(name)):
+            raise ValueError(name)
+        if not (r := self.p_region.search(name)):
+            raise ValueError(name)
 
-        return m.group()
+        # grade_region
+        return f'{g.group()}_{r.group()}'
 
     def copy(self, src: Path, use: Use):
-        grade = self.grade(src)
-        dst = self.dst / use / grade
+        dst = self.dst / use / self.case(src.name) / f'{src.stem}.tpl'
+
+        if dst.exists():
+            return
 
         match src.suffix:
             case '.tpl':
                 shutil.copy2(src, dst)
             case '.tplx':
-                eco2.Eco2.read(src).write(dst / f'{src.stem}.tpl')
+                eco2.Eco2.read(src).write(dst)
             case _:
                 raise ValueError(src)
 
     def nopv(self, src: Iterable[Path], use: Use):
-        dst = self.dst / use / Grade.NOPV
-
         for s in tqdm(src, desc='no pv'):
             if Grade.BASE not in s.name:
                 continue
@@ -97,9 +102,11 @@ class Copy:
                 .removesuffix('-PV-required-PvNotRequired')
                 .replace('Base', 'NOPV')
             )
-            d = dst / f'{stem}.tpl'
 
-            eco = _remove_renewable(s, pv_only=True)
+            d = self.dst / use / self.case(stem) / f'{stem}.tpl'
+
+            eco = editor.Eco2Editor(s)
+            _remove_renewable(eco.xml, pv_only=True)
             eco.write(d, dsr=False)
 
     def copy_batch(self, use: Use, /):
@@ -120,14 +127,14 @@ class Copy:
 
     def __call__(self):
         self.dst.mkdir(exist_ok=True)
-        for use, grade in itertools.product(Uses, Grade):
-            if grade == Grade.SUB5:
+        for use, grade, region in itertools.product(
+            USES, Grade, ('중부1', '중부2', '남부', '제주')
+        ):
+            if grade in {Grade.SUB5, Grade.EXST}:
                 continue
 
-            if grade != Grade.NOPV:
-                continue
-
-            self.dst.joinpath(use, grade).mkdir(parents=True, exist_ok=True)
+            dst = self.dst.joinpath(use, f'{grade}_{region}')
+            dst.mkdir(parents=True, exist_ok=True)
 
         self.copy_batch('non-res')
         self.copy_batch('res')
