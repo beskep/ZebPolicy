@@ -18,10 +18,10 @@ dependencies    = [
 
 [dependency-groups]
 dev       = [
-  "lxml>=6.1.1",
   "pytest>=9.0.3",
   "ruff>=0.15.15",
   "ty>=0.0.42",
+  "types-lxml>=2026.2.16",
 ]
 dataframe = [
   "fastexcel>=0.20.2",
