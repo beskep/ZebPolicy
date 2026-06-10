@@ -2,8 +2,10 @@ import enum
 from typing import Literal
 
 Use = Literal['non-res', 'res']
+Region = Literal['중부1', '중부2', '남부', '제주']
 
-Uses: tuple[Use, Use] = ('non-res', 'res')
+USES: tuple[Use, Use] = ('non-res', 'res')
+REGIONS: tuple[Region, Region, Region, Region] = ('중부1', '중부2', '남부', '제주')
 
 
 class Grade(enum.StrEnum):
