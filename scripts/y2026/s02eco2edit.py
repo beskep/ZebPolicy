@@ -2,7 +2,6 @@ import dataclasses as dc
 import functools
 import itertools
 import math
-import re
 import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -18,19 +17,13 @@ from eco2.editor import set_child_text
 from zeb.utils import tqdm
 from zeb.utils.cli import App
 from zeb.y2026 import equipment as eq
-from zeb.y2026.common import REGIONS, USES, Grade, Region, Use
+from zeb.y2026.common import REGIONS, USES, Case, Grade, Use
 from zeb.y2026.config import Paths  # noqa: TC001
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from lxml.etree import _Element
-
-_P_CASE = re.compile(
-    r'^(?P<owner>\w)(-(?P<c>C\d))?\-(?P<a>A\d)'
-    r'\-(?P<purpose>\w)\-(?P<index>\d+)\-(?P<region>중부[12]|남부|제주)'
-    r'\-(?P<grade>(ZEB[+1-5])|Base|Existing|NOPV)'
-)
 
 app = App(
     config=Toml(
@@ -40,31 +33,6 @@ app = App(
     )
 )
 logger = structlog.stdlib.get_logger()
-
-
-@dc.dataclass
-class Case:
-    owner: str
-    purpose: str
-    index: int
-    region: Region
-    grade: Grade
-    a: str
-    c: str | None = None
-
-    @classmethod
-    def search(cls, s: str, /):
-        if not (m := _P_CASE.search(s)):
-            raise ValueError(s)
-
-        g = m.groupdict()
-        g['index'] = int(g['index'])
-
-        return cls(**g)  # ty:ignore[invalid-argument-type]
-
-    @property
-    def subdir(self):
-        return f'{self.grade}_{self.region}'
 
 
 def _remove_renewable(src: str | Path | editor.Eco2Xml, *, pv_only: bool = False):
@@ -251,7 +219,7 @@ class _ExistingBldg(editor.Eco2Editor):
                     (_Expr.category == '난방효율')
                     & (_Expr.part == part)
                     & (_Expr.source.is_null() | (_Expr.source == heating.source))
-                    & (_Expr.scale.is_null() | (_Expr.scale == self.case.a))
+                    & (_Expr.scale.is_null() | (_Expr.scale == self.case.scale_a))
                 )
             )
         except pl.exceptions.RowsError as e:
@@ -294,7 +262,7 @@ class _ExistingBldg(editor.Eco2Editor):
                 (_Expr.category == '냉방효율')
                 & (_Expr.part == cooling.type)
                 & (_Expr.source.is_null() | (_Expr.source == cooling.source))
-                & (_Expr.scale.is_null() | (_Expr.scale == self.case.a))
+                & (_Expr.scale.is_null() | (_Expr.scale == self.case.scale_a))
             )
         except pl.exceptions.RowsError as e:
             raise editor.EditorError(cooling) from e
