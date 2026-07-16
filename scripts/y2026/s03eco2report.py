@@ -1,5 +1,4 @@
 import dataclasses as dc
-from operator import mul
 from typing import TYPE_CHECKING, ClassVar
 
 import eco2.report
@@ -23,83 +22,43 @@ app = App(
 logger = structlog.stdlib.get_logger()
 
 
+def _read(src: Path):
+    try:
+        report = eco2.report.BatchReport(src, kwargs={'encoding': 'UTF-8'}).raw
+    except UnicodeError, pl.exceptions.ComputeError:
+        report = eco2.report.BatchReport(src, kwargs={'encoding': 'korean'}).raw
+
+    use = mi.one(x for x in src.parts if x in comm.USES)
+    logger.debug('shape=%s, use=%s, src=%s', report.shape, use, src)
+
+    return report.insert_column(0, pl.lit(use).alias('use'))
+
+
 @app.command
-@dc.dataclass
-class Prep:
-    _: dc.KW_ONLY
-    paths: Paths
+def read(*, paths: Paths, batchreport: str = 'batchreport.tab'):
+    # 계산 결과가 없는 폴더 체크
+    for d in paths.eco2.glob('**/*/'):
+        if not (d / batchreport).exists():
+            logger.warning('%s not found: %s', batchreport, d)
 
-    BATCHREPORT: ClassVar[str] = 'batchreport.tab'
-    AREA_FIX: ClassVar[dict[str, str]] = {
-        '1878.42 // 1549.68': '1549.68',
-        '31031.96 // 19726.98': '19726.98',
-        '19017.02 (전:9337.64 326세대)': '19017.02',
-        '32928.31 (용:16505.68': '16505.68',
-        '35542.73 (용22774.09)': '22774.09',
-        '142.841.7416': '142841.7416',
-        '135415.55(820세대)': '135415.55',
-    }
+    reports = (_read(x) for x in paths.eco2.rglob(batchreport))
+    data = pl.concat(reports, how='vertical_relaxed')
 
-    def check_batch_reports(self):
-        # 계산 결과가 없는 폴더 체크
-        for d in self.paths.eco2.glob('**/*/'):
-            if not (d / self.BATCHREPORT).exists():
-                logger.warning('%s not found: %s', self.BATCHREPORT, d)
+    paths.analysis.mkdir(exist_ok=True)
+    data.write_parquet(paths.analysis / '00.raw.parquet')
 
-    @staticmethod
-    def read(src: Path):
-        try:
-            report = eco2.report.BatchReport(src, kwargs={'encoding': 'UTF-8'}).raw
-        except UnicodeError, pl.exceptions.ComputeError:
-            report = eco2.report.BatchReport(src, kwargs={'encoding': 'korean'}).raw
-
-        use = mi.one(x for x in src.parts if x in comm.USES)
-        logger.info('shape=%s, use=%s, src=%s', report.shape, use, src)
-
-        return report.insert_column(0, pl.lit(use).alias('use'))
-
-    def prep(self):
-        reports = (self.read(x) for x in self.paths.eco2.rglob(self.BATCHREPORT))
-        area = ('대지면적', '연면적', '건축면적')
-        data = (
-            pl
-            .concat(reports, how='vertical_relaxed')
-            .with_columns(pl.col('file').str.extract_groups(comm.Case.PATTERN))
-            .unnest('file')
-            .rename({'scale_a': 'scale.a', 'scale_c': 'scale.c'})
-            .with_columns(
-                pl.col('index').cast(pl.UInt8),
-                pl.col(area).cast(pl.String).name.suffix('_원본'),
-                pl
-                .col(area)
-                .str.strip_chars()
-                .str.replace_all(',', '')
-                .replace(self.AREA_FIX)
-                .cast(pl.Float64),
-            )
-            .sort(pl.all())
-        )
-
-        data.write_parquet(self.paths.eco2 / '00.raw.parquet')
-        data.write_excel(self.paths.eco2 / '00.raw.xlsx')
-        self.paths.eco2.joinpath('00.glimpse.txt').write_text(
-            data.glimpse(return_type='string')
-        )
-
-        return data
-
-    def __call__(self):
-        self.check_batch_reports()
-        self.prep()
+    return data
 
 
 @app.command
 @dc.dataclass
-class Emission:
+class Parse:
     _: dc.KW_ONLY
     paths: Paths
 
     INDEX: ClassVar[tuple[str, ...]] = (
+        'bldg',
+        'use',
         'owner',
         'scale.c',
         'scale.a',
@@ -110,8 +69,75 @@ class Emission:
         '대지면적',
         '연면적',
         '건축면적',
-        '주체',
     )
+    AREA_FIX: ClassVar[dict[str, str]] = {
+        '1878.42 // 1549.68': '1549.68',
+        '31031.96 // 19726.98': '19726.98',
+        '19017.02 (전:9337.64 326세대)': '19017.02',
+        '32928.31 (용:16505.68': '16505.68',
+        '35542.73 (용22774.09)': '22774.09',
+        '142.841.7416': '142841.7416',
+        '135415.55(820세대)': '135415.55',
+    }
+
+    def __call__(self):
+        root = self.paths.analysis
+        area = ('대지면적', '연면적', '건축면적')
+        data = (
+            pl
+            .scan_parquet(self.paths.analysis / '00.raw.parquet')
+            .with_columns(
+                pl.col('use').replace_strict({'res': '주거', 'non-res': '비주거'}),
+                pl.col('file').str.extract_groups(comm.Case.PATTERN),
+            )
+            .unnest('file')
+            .rename({'scale_a': 'scale.a', 'scale_c': 'scale.c'})
+            .with_columns(
+                pl.format(
+                    '{}.{}.{}.{}.{}.{}',
+                    pl.col('use').str.slice(0, 1),
+                    'owner',
+                    'scale.a',
+                    pl.col('scale.c').fill_null('n'),
+                    'purpose',
+                    'index',
+                ).alias('bldg'),
+                pl.col('owner').replace_strict({'공': '공공', '민': '민간'}),
+                pl.col('purpose').replace_strict({
+                    '기': '기타',
+                    '상': '상업',
+                    '교': '교육사회',
+                    '공': '공동주택',
+                    '단': '단독주택',
+                }),
+                pl.col('index').cast(pl.UInt8),
+                pl.col(area).cast(pl.String).name.suffix('_원본'),
+                pl
+                .col(area)
+                .str.strip_chars()
+                .str.replace_all(',', '')
+                .replace(self.AREA_FIX)
+                .cast(pl.Float64),
+            )
+            .select(*self.INDEX, pl.all().exclude(self.INDEX))
+            .sort(pl.all())
+            .collect()
+        )
+
+        data.write_parquet(root / '01.parsed.parquet')
+        data.write_excel(root / '01.parsed.xlsx')
+        root.joinpath('01.glimpse.txt').write_text(data.glimpse(return_type='string'))
+
+        return data
+
+
+@app.command
+@dc.dataclass
+class Emission:
+    _: dc.KW_ONLY
+    paths: Paths
+
+    INDEX: ClassVar[tuple[str, ...]] = Parse.INDEX
     SOURCE: ClassVar[dict[str, str]] = {
         '난방유(등유)': '등유',
         '액화가스(LPG)': 'LPG',
@@ -125,11 +151,12 @@ class Emission:
     }
 
     def __call__(self):
+        root = self.paths.analysis
         emission_factors = zeb.emission.EmissionFactors.read().dataframe()
 
         data = (
             pl
-            .scan_parquet(self.paths.eco2 / '00.raw.parquet')
+            .scan_parquet(root / '01.parsed.parquet')
             .select(
                 *self.INDEX,
                 cs.starts_with(
@@ -179,10 +206,8 @@ class Emission:
             .join(emission_factors, on='source', how='left', validate='m:m')
         )
 
-        data.write_parquet(self.paths.eco2 / '01.emission.parqauet')
-        data.head(1000).write_csv(
-            self.paths.eco2 / '01.emission.sample.csv', include_bom=True
-        )
+        data.write_parquet(root / '02.emission.parquet')
+        data.head(1000).write_csv(root / '02.emission.sample.csv', include_bom=True)
 
         return data
 
