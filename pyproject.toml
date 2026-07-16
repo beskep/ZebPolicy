@@ -32,6 +32,7 @@ dataframe = [
 plot      = [
   "cmap>=0.7.2",
   "matplotlib>=3.10.9",
+  "plotnine>=0.15.7",
   "seaborn>=0.13.2",
 ]
 roadmap   = [
