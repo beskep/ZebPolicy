@@ -2,14 +2,16 @@
 
 import dataclasses as dc
 import functools
-from pathlib import Path  # noqa: TC003
+from pathlib import Path  # ruff:ignore[typing-only-standard-library-import]
 
 import eco2.report
 import polars as pl
 import polars.selectors as cs
 import xlsxwriter
 from cyclopts.config import Toml
-from cyclopts.types import ExistingDirectory  # noqa: TC002
+from cyclopts.types import (
+    ExistingDirectory,  # ruff:ignore[typing-only-third-party-import]
+)
 
 from zeb.emission import EmissionFactors
 from zeb.utils.cli import App

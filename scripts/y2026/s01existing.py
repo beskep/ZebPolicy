@@ -12,7 +12,7 @@ import seaborn as sns
 
 from zeb import utils
 from zeb.utils.cli import App
-from zeb.y2026.config import Paths  # noqa: TC001
+from zeb.y2026.config import Paths  # ruff:ignore[typing-only-first-party-import]
 
 app = App(
     config=cyclopts.config.Toml(

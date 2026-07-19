@@ -35,7 +35,7 @@ class SensitivityAnalysis:
     y: str | Collection[str]
 
     def sensitivity(self) -> dict[tuple[str, str], float]:
-        """`{(y, x): sensitivity}`"""  # noqa: D400
+        """`{(y, x): sensitivity}`"""  # ruff:ignore[missing-trailing-period]
         raise NotImplementedError
 
     def frame(self) -> pl.DataFrame:

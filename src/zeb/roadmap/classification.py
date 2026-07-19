@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import tomllib
-from datetime import date  # noqa: TC003
+from datetime import date  # ruff:ignore[typing-only-standard-library-import]
 from itertools import chain
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal

@@ -11,7 +11,9 @@ import cyclopts
 import matplotlib.pyplot as plt
 import polars as pl
 import seaborn as sns
-from cyclopts.types import ExistingDirectory  # noqa: TC002
+from cyclopts.types import (
+    ExistingDirectory,  # ruff:ignore[typing-only-third-party-import]
+)
 from loguru import logger
 from matplotlib import patheffects
 from matplotlib.container import BarContainer
@@ -474,7 +476,7 @@ class GroupReprParam:
     area: Area
     baseline: Literal[Grade.BASE, Grade.SUB5]
     reference: Literal['ECO2', 'reference']
-    variable: Literal['소요량', '배출량'] | str  # noqa: PYI051
+    variable: Literal['소요량', '배출량'] | str  # ruff:ignore[redundant-literal-union]
     clip: bool = False
     ownership: bool = True
 
@@ -598,7 +600,7 @@ class GroupReprEmission:
         data = (
             zeb
             .join(base, on=self.INDEX, how='left', validate='m:1')
-            .filter(pl.col('baseline') != 0.0)  # noqa: RUF069  # XXX
+            .filter(pl.col('baseline') != 0.0)  # ruff:ignore[float-equality-comparison]  # XXX
             .with_columns(
                 idx=pl.col('use').replace_strict({x: i for i, x in enumerate(order)})
             )

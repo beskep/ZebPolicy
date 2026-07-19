@@ -4,7 +4,7 @@ import dataclasses as dc
 import enum
 import itertools
 import warnings
-from collections.abc import Sequence  # noqa: TC003
+from collections.abc import Sequence  # ruff:ignore[typing-only-standard-library-import]
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal
 
@@ -659,7 +659,7 @@ class _Plotter2:
                     self.data
                     .filter(pl.col('난방설비').str.starts_with('가스보일러'))
                     .rename({'온열원설비_효율': 'value'})
-                    .filter(pl.col('value') > 0.6)  # noqa: PLR2004 # NOTE ㅋ
+                    .filter(pl.col('value') > 0.6)  # ruff:ignore[magic-value-comparison] # NOTE ㅋ
                 )
                 assert (
                     data
@@ -792,7 +792,7 @@ def pv(root: Path, percentiles: tuple[float, ...] = (0.1, 0.25, 0.50, 0.75, 0.9)
 @app.command
 def area_error(src: Path, dst: Path | None = None):
     """연면적 추출 시 오류 케이스 정리."""
-    from eco2.editor import Eco2Xml  # noqa: PLC0415
+    from eco2.editor import Eco2Xml  # ruff:ignore[import-outside-top-level]
 
     dst = dst or src.parent / 'AREA-ERROR.txt'
 

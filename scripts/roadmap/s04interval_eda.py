@@ -13,7 +13,7 @@ from __future__ import annotations
 import dataclasses as dc
 from functools import cached_property
 from itertools import product
-from pathlib import Path  # noqa: TC003
+from pathlib import Path  # ruff:ignore[typing-only-standard-library-import]
 from typing import TYPE_CHECKING, ClassVar, Literal
 
 import more_itertools as mi
@@ -446,7 +446,7 @@ def analyse():
     analyse_summarise_sensitivity()
 
 
-def _anova(  # noqa: PLR0913
+def _anova(  # ruff:ignore[too-many-arguments]
     data: FrameType,
     *,
     dv: str,
@@ -882,7 +882,7 @@ class PolicyTarget:
 
 
 @app.command
-def policy_target(  # noqa: PLR0913
+def policy_target(  # ruff:ignore[too-many-arguments]
     *,
     dist_group: tuple[str, ...] = (
         '정책구간',
@@ -1008,7 +1008,7 @@ class PolicyTarget2(PolicyTarget):
 
 
 @app.command
-def policy_target2(  # noqa: PLR0913
+def policy_target2(  # ruff:ignore[too-many-arguments]
     *,
     dist_group: tuple[str, ...] = (
         '정책구간',

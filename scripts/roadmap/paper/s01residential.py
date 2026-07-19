@@ -113,7 +113,7 @@ def prep(
             .alias('지하층'),
             pl
             .col(V.FLOORS)
-            .str.replace_many(['∼', '츷'], ['~', '층'])  # noqa: RUF001
+            .str.replace_many(['∼', '츷'], ['~', '층'])  # ruff:ignore[ambiguous-unicode-character-string]
             .str.extract(r'지상\s*(\d+~)?(\d*)\s*층?', group_index=2)
             .cast(pl.UInt8, strict=False)
             .alias(V.HIGHEST_FLOOR),

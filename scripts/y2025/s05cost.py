@@ -5,14 +5,14 @@ import dataclasses as dc
 import enum
 import functools
 import re
-from pathlib import Path  # noqa: TC003
+from pathlib import Path  # ruff:ignore[typing-only-standard-library-import]
 from typing import ClassVar
 
 import cyclopts
 import polars as pl
 import seaborn as sns
 import xlsxwriter
-from cyclopts.types import ExistingPath  # noqa: TC002
+from cyclopts.types import ExistingPath  # ruff:ignore[typing-only-third-party-import]
 from matplotlib.figure import Figure
 
 from zeb import utils

@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, Any
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
-from seaborn._base import variable_type  # noqa: PLC2701
+from seaborn._base import variable_type  # ruff:ignore[import-private-name]
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -25,7 +25,7 @@ def _category(data: pd.DataFrame, x: str, y: str) -> str:
     raise TypeError(tuple(zip(xy, [data[v].dtype for v in xy], dtypes, strict=True)))
 
 
-def boxstrip(  # noqa: PLR0913
+def boxstrip(  # ruff:ignore[too-many-arguments]
     data: pd.DataFrame,
     *,
     x: str,

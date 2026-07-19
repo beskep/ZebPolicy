@@ -40,7 +40,7 @@ def test_standardized_coefficient(xx: list[str]):
 
     # 표준화 후 회귀
     standardized = (
-        data  # noqa: PD010
+        data  # ruff:ignore[pandas-use-of-dot-pivot-or-unstack]
         .select(cs.numeric())
         .with_row_index()
         .unpivot(index='index')

@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import polars as pl
 import seaborn as sns
 import xlsxwriter
-from cyclopts.types import ExistingPath  # noqa: TC002
+from cyclopts.types import ExistingPath  # ruff:ignore[typing-only-third-party-import]
 from matplotlib.figure import Figure
 from matplotlib.layout_engine import ConstrainedLayoutEngine
 from matplotlib.ticker import PercentFormatter

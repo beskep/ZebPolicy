@@ -65,7 +65,7 @@ class EmissionFactors:
                 yield reference, source, factor
 
     def dataframe(self):
-        import polars as pl  # noqa: PLC0415
+        import polars as pl  # ruff:ignore[import-outside-top-level]
 
         return pl.DataFrame(
             list(self.iter()),

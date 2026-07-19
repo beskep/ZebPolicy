@@ -18,7 +18,7 @@ from zeb.utils import tqdm
 from zeb.utils.cli import App
 from zeb.y2026 import equipment as eq
 from zeb.y2026.common import REGIONS, USES, Case, Grade, Use
-from zeb.y2026.config import Paths  # noqa: TC001
+from zeb.y2026.config import Paths  # ruff:ignore[typing-only-first-party-import]
 
 if TYPE_CHECKING:
     from collections.abc import Iterable

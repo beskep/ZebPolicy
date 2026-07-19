@@ -4,7 +4,7 @@ import bisect
 import dataclasses as dc
 import functools
 import re
-from pathlib import Path  # noqa: TC003
+from pathlib import Path  # ruff:ignore[typing-only-standard-library-import]
 from typing import ClassVar
 
 import cyclopts
@@ -12,7 +12,9 @@ import polars as pl
 import polars.selectors as cs
 import rich
 import xlsxwriter
-from cyclopts.types import ExistingDirectory  # noqa: TC002
+from cyclopts.types import (
+    ExistingDirectory,  # ruff:ignore[typing-only-third-party-import]
+)
 from loguru import logger
 
 from scripts.y2025.common import Grade
