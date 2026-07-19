@@ -11,7 +11,7 @@ from cyclopts.config import Toml
 import zeb.emission
 import zeb.y2026.common as comm
 from zeb.utils.cli import App
-from zeb.y2026.config import Paths  # noqa: TC001
+from zeb.y2026.config import Paths  # ruff:ignore[typing-only-first-party-import]
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -91,6 +91,7 @@ class Parse:
                 pl.col('file').str.extract_groups(comm.Case.PATTERN),
             )
             .unnest('file')
+            .with_columns(pl.col('scale.c').fill_null('null'))
             .rename({'scale_a': 'scale.a', 'scale_c': 'scale.c'})
             .with_columns(
                 pl.format(
@@ -98,7 +99,7 @@ class Parse:
                     pl.col('use').str.slice(0, 1),
                     'owner',
                     'scale.a',
-                    pl.col('scale.c').fill_null('n'),
+                    'scale.c',
                     'purpose',
                     'index',
                 ).alias('bldg'),
