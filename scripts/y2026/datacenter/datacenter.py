@@ -46,7 +46,7 @@ class Parameter(enum.StrEnum):
 
 
 @dc.dataclass(frozen=True)
-class Editor(eco2.editor.Eco2Editor):
+class _Editor(eco2.editor.Eco2Editor):
     tc: tuple[float, ...] = (26, 27, 28, 29, 30)
     qe: tuple[float, ...] = (1800, 1440, 900)
     hw: tuple[float, ...] = (30, 0)
@@ -104,7 +104,7 @@ class EditEco2:
         self.edit.mkdir(exist_ok=True)
 
         for appnum, src in tqdm(self.cases):
-            editor = Editor(src)
+            editor = _Editor(src)
             editor.write(self.edit / f'{appnum} raw.tpl')
 
             for c in editor():
@@ -118,7 +118,14 @@ class EditEco2:
 
 @app.command
 def parse_report(root: Path, edit: Path):
-    report = eco2.report.BatchReport(edit / 'batchreport.tab')
+    try:
+        report = eco2.report.BatchReport(edit / 'batchreport.tab')
+        report.raw  # ruff: ignore[useless-expression]
+    except pl.exceptions.ComputeError:
+        report = eco2.report.BatchReport(
+            edit / 'batchreport.tab', kwargs={'encoding': 'korean'}
+        )
+
     report.raw.write_parquet(root / '03.report.raw.parquet')
     report.raw.write_excel(root / '03.report.raw.xlsx')
     report.data.write_parquet(root / '03.report.tidy.parquet')
