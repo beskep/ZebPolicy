@@ -41,6 +41,7 @@ APPLICATION_NUMBER = re.compile(r'^(?P<appnum>\d+)_.*\.tpl(x)?$')
 
 class Parameter(enum.StrEnum):
     TC = '냉방설정온도'
+    TH = '난방설정온도'
     QE = '작업보조기기'
     HW = '일일급탕요구량'
 
@@ -48,6 +49,7 @@ class Parameter(enum.StrEnum):
 @dc.dataclass(frozen=True)
 class _Editor(eco2.editor.Eco2Editor):
     tc: tuple[float, ...] = (26, 27, 28, 29, 30)
+    th: tuple[float, ...] = (20, 19, 18)
     qe: tuple[float, ...] = (1800, 1440, 900)
     hw: tuple[float, ...] = (30, 0)
 
@@ -117,19 +119,60 @@ class EditEco2:
 
 
 @app.command
-def parse_report(root: Path, edit: Path):
-    try:
-        report = eco2.report.BatchReport(edit / 'batchreport.tab')
-        report.raw  # ruff: ignore[useless-expression]
-    except pl.exceptions.ComputeError:
-        report = eco2.report.BatchReport(
-            edit / 'batchreport.tab', kwargs={'encoding': 'korean'}
+@dc.dataclass
+class ParseReport:
+    root: Path
+    edit: Path
+
+    @staticmethod
+    def read(src: Path):
+        try:
+            report = eco2.report.BatchReport(src)
+            report.raw  # ruff: ignore[useless-expression]
+        except pl.exceptions.ComputeError:
+            report = eco2.report.BatchReport(src, encoding='korean')
+
+        return report
+
+    @staticmethod
+    def parse_file(data: pl.DataFrame):
+        return (
+            data
+            .with_columns(
+                pl
+                .col('file')
+                .str.extract_groups(
+                    r'^(?P<appnum>\d+) (?P<cvar>[a-zA-Z]+)(?P<cval>\d+)?\.tplx?'
+                )
+                .alias('file')
+            )
+            .unnest('file')
+            .rename({'cvar': 'case.variable', 'cval': 'case.value'})
+            .with_columns(
+                pl.col('appnum').cast(pl.UInt32),
+                pl.col('case.value').cast(pl.Float64),
+            )
+            .insert_column(
+                2,
+                pl
+                .col('case.variable')
+                .replace({x.name: x.value for x in Parameter} | {'raw': '원본'})
+                .alias('case.variable.kor'),
+            )
         )
 
-    report.raw.write_parquet(root / '03.report.raw.parquet')
-    report.raw.write_excel(root / '03.report.raw.xlsx')
-    report.data.write_parquet(root / '03.report.tidy.parquet')
-    report.data.write_excel(root / '03.report.tidy.xlsx')
+    def __call__(self):
+        reports = [self.read(x) for x in self.edit.glob('batchreport*.tab')]
+
+        raw = pl.concat(x.raw for x in reports)
+        raw = self.parse_file(raw)
+        raw.write_parquet(self.root / '03.report.raw.parquet')
+        raw.write_excel(self.root / '03.report.raw.xlsx')
+
+        data = pl.concat(x.data for x in reports)
+        data = self.parse_file(data)
+        data.write_parquet(self.root / '03.report.tidy.parquet')
+        data.write_excel(self.root / '03.report.tidy.xlsx')
 
 
 @app.command
@@ -141,7 +184,6 @@ class EnergyTrend:
 
     @functools.cached_property
     def data(self):
-        params = {x.name: f'{x.value} ' for x in Parameter}
         variables = [f'{x}/합계' for x in self.variables]
         data = (
             pl
@@ -149,25 +191,27 @@ class EnergyTrend:
             .filter(pl.col('variable').is_in(variables))
             .with_columns(
                 pl
-                .col('file')
-                .str.extract_groups(r'^(?P<appnum>\d+) (?P<case>\w+)\.tplx?')
-                .alias('group'),
+                .format(
+                    '{} {}', 'case.variable.kor', pl.col('case.value').cast(pl.Int32)
+                )
+                .str.strip_chars()
+                .alias('case'),
                 pl.col('value').str.replace_all(',', '').cast(pl.Float64),
             )
-            .unnest('group')
             .with_columns(
-                pl.col('case').str.replace_many(params).replace('raw', '원본'),
                 pl
                 .col('value')
-                .filter(pl.col('case') == 'raw')
+                .filter(pl.col('case.variable') == 'raw')
                 .sum()
                 .over(['appnum', 'variable'])
                 .alias('raw'),
             )
-            .with_columns(pl.col('value').truediv(pl.col('raw')).alias('ratio'))
+            .with_columns(
+                pl.col('value').truediv(pl.col('raw')).alias('ratio'),
+            )
             .sort(
-                pl.col('case').replace_strict(
-                    {'원본': 0}, default=1, return_dtype=pl.UInt8
+                pl.col('case.variable').replace_strict(
+                    {'raw': 0}, default=1, return_dtype=pl.UInt8
                 ),
                 'case',
                 'appnum',
@@ -197,7 +241,17 @@ class EnergyTrend:
         for v, ax in zip(self.variables, axes, strict=True):
             df = data.filter(pl.col('variable') == f'{v}/합계')
             unit = df['unit'][0]
-            sns.boxplot(df, x=value, y='case', ax=ax)
+            sns.boxplot(
+                df,
+                x=value,
+                y='case',
+                ax=ax,
+                fill=False,
+                fliersize=0,
+                color='slategray',
+                linewidth=1,
+            )
+            sns.stripplot(df, x=value, y='case', ax=ax, jitter=0.4, size=3, alpha=0.4)
 
             ax.set_xlabel(f'{v} [{unit}]' if value == 'value' else '원본 대비 비율')
             ax.set_ylabel('')
