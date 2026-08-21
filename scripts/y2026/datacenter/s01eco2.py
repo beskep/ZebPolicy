@@ -17,6 +17,7 @@ import more_itertools as mi
 import polars as pl
 import seaborn as sns
 import structlog
+import xlsxwriter
 from matplotlib.figure import Figure
 from tqdm.rich import tqdm
 
@@ -46,9 +47,17 @@ class Parameter(enum.StrEnum):
     HW = '일일급탕요구량'
 
 
+@dc.dataclass
+class Cases:
+    tc: tuple[float, ...] = (26, 27, 28, 29, 30)
+    th: tuple[float, ...] = (20, 19, 18)
+    qe: tuple[float, ...] = (1800, 1440, 900)
+    hw: tuple[float, ...] = (30, 0)
+
+
 @dc.dataclass(frozen=True)
 class _Editor(eco2.editor.Eco2Editor):
-    tc: tuple[float, ...] = (26, 27, 28, 29, 30)
+    tc: tuple[float, ...] = (26, 27, 28, 29, 30)  # FIXME
     th: tuple[float, ...] = (20, 19, 18)
     qe: tuple[float, ...] = (1800, 1440, 900)
     hw: tuple[float, ...] = (30, 0)
@@ -262,6 +271,152 @@ class EnergyTrend:
         utils.mpl.MplTheme().grid().apply()
         self.plot('value')
         self.plot('ratio')
+
+
+@app.command
+def describe(root: Path):
+    data = (
+        pl
+        .scan_parquet(root / '03.report.tidy.parquet')
+        .with_columns(
+            pl.col('variable').str.extract_groups(
+                r'^(?<variable>(?:등급산출용 )?1차에너지소요량)/'
+                r'(?<function>\w+)(?:/(?<source>.*))?$'
+            )
+        )
+        .unnest('variable')
+        .drop_nulls('variable')
+        .filter(pl.col('source').is_null())
+        .with_columns(
+            pl.col('value').str.replace_all(',', '').cast(pl.Float64),
+        )
+        .drop('source')
+        .collect()
+    )
+
+    cases = dc.asdict(Cases())
+    raw_cases = pl.DataFrame([
+        {
+            'case.variable': p.name,
+            'case.variable.kor': p.value,
+            'case.value': cases[p.name.lower()][0],
+        }
+        for p in Parameter
+    ])
+    raw_cases = (
+        data
+        .filter(pl.col('case.variable') == 'raw')
+        .drop('case.variable', 'case.variable.kor', 'case.value')
+        .join(raw_cases, how='cross')
+        .with_columns(pl.col('case.value').cast(pl.Float64))
+    )
+
+    data = (
+        pl
+        .concat([data, raw_cases], how='diagonal')
+        .with_columns(
+            pl
+            .col('value')
+            .filter(pl.col('case.variable') == 'raw')
+            .sum()
+            .over(['appnum', 'variable', 'function'])
+            .alias('raw')
+        )
+        .with_columns(pl.col('value').truediv('raw').alias('ratio'))
+    )
+    data.write_parquet(root / '05.consumption.parquet')
+    data.write_excel(root / '05.consumption.xlsx')
+
+    group = [
+        'case.variable',
+        'case.variable.kor',
+        'case.value',
+        'consumption',
+        'function',
+    ]
+    (
+        utils.pl
+        .PolarsSummary(
+            data
+            .rename({'variable': 'consumption'})
+            .select([*group, 'value', 'raw', 'ratio'])
+            .with_columns(),
+            group=group,
+        )
+        .describe()
+        .sort('variable', pl.all())
+        .write_excel(root / '05.consumption.describe.xlsx')
+    )
+
+    return data
+
+
+@app.command
+def grade(root: Path):
+    data = (
+        pl
+        .scan_parquet(root / '03.report.tidy.parquet')
+        .filter(
+            pl.col('variable').is_in([
+                '에너지자립률',
+                '등급산출용 1차에너지소요량/합계',
+            ])
+        )
+        .with_columns(
+            pl.col('value').str.replace_all(',', '').cast(pl.Float64),
+            pl.col('variable').replace({
+                '등급산출용 1차에너지소요량/합계': '등급1차소요량'
+            }),
+        )
+        .collect()
+        .pivot(
+            'variable',
+            index=['appnum', 'case.variable', 'case.value'],
+            values='value',
+        )
+        .with_columns(
+            pl
+            .col('에너지자립률')
+            .cut(
+                [20, 40, 60, 80, 100, 120],
+                labels=['6', '5', '4', '3', '2', '1', '0'],
+            )
+            .alias('grade.eir'),
+            pl
+            .col('등급1차소요량')
+            .cut(
+                [-70, -30, 10, 50, 90, 130],
+                labels=['0', '1', '2', '3', '4', '5', '6'],
+            )
+            .alias('grade.consumption'),
+        )
+        .with_columns(
+            pl.col('grade.eir', 'grade.consumption').cast(pl.String).cast(pl.UInt8)
+        )
+        .with_columns(
+            pl.min_horizontal('grade.eir', 'grade.consumption').alias('grade')
+        )
+        .sort(pl.all())
+    )
+
+    wide = (
+        data
+        .with_columns(
+            pl.format(
+                '{}{}',
+                pl.col('case.variable'),
+                pl.col('case.value').cast(pl.Int32).cast(pl.String).fill_null(''),
+            ).alias('case')
+        )
+        .pivot('case', index='appnum', values='grade')
+        .with_columns()
+    )
+
+    with xlsxwriter.Workbook(root / '05.grade.xlsx') as wb:
+        data.write_excel(wb, 'raw')
+        wide.write_excel(wb, 'wide')
+
+    return data
 
 
 if __name__ == '__main__':
