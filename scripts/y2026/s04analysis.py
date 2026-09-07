@@ -188,16 +188,18 @@ class Trend:
                 x='', y=ylabel, fill='', title=f'등급·용도별 {v} 중위수 (IQR 에러바)'
             )
             + gg.coord_flip()
-            + gg.theme(figure_size=(16 / 2.54, 9 / 2.54))
             + gg.theme_bw(base_family='Noto Sans KR')
+            + gg.theme(
+                figure_size=(16 / 2.54, 12 / 2.54),
+                panel_grid_major_y=gg.element_blank(),
+                plot_title=gg.element_text(ha='left'),
+            )
         )
         fig = p.draw()
         ax = fig.get_axes()[0]
         ax.invert_yaxis()
 
-        path = self.output / f'{variable}{".ratio" if normalize else ""}.svg'
-        fig.savefig(path)
-        fig.savefig(path.with_suffix('.png'))
+        fig.savefig(self.output / f'{variable}{".ratio" if normalize else ""}.png')
 
     def __call__(self):
         for group in (
