@@ -11,6 +11,7 @@ from cyclopts.config import Toml
 import zeb.emission
 import zeb.y2026.common as comm
 from zeb.utils.cli import App
+from zeb.y2026.common import Grade
 from zeb.y2026.config import Paths  # ruff:ignore[typing-only-first-party-import]
 
 if TYPE_CHECKING:
@@ -91,8 +92,8 @@ class Parse:
                 pl.col('file').str.extract_groups(comm.Case.PATTERN),
             )
             .unnest('file')
-            .with_columns(pl.col('scale.c').fill_null('null'))
             .rename({'scale_a': 'scale.a', 'scale_c': 'scale.c'})
+            .with_columns(pl.col('scale.c').fill_null('null'))
             .with_columns(
                 pl.format(
                     '{}.{}.{}.{}.{}.{}',
@@ -124,6 +125,28 @@ class Parse:
             .sort(pl.all())
             .collect()
         )
+
+        owner = pl.col('owner')
+        grade = pl.col('grade')
+
+        baseline = (
+            (data)
+            .filter(
+                (owner.eq('민간') & grade.eq(Grade.NOPV))
+                | (owner.eq('공공') & grade.eq(Grade.BASE))
+            )
+            .with_columns(pl.lit(Grade.BASE).alias('grade'))
+        )
+        sub5 = (
+            (data)
+            .filter(grade == Grade.BASE)
+            .with_columns(pl.lit(Grade.SUB5).alias('grade'))
+        )
+        data = pl.concat([
+            baseline,
+            sub5,
+            data.filter(grade.is_in([Grade.BASE, Grade.SUB5]).not_()),
+        ])
 
         data.write_parquet(root / '01.parsed.parquet')
         data.write_excel(root / '01.parsed.xlsx')

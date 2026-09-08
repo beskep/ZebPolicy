@@ -11,6 +11,7 @@ import polars as pl
 import structlog
 
 from zeb.utils.cli import App
+from zeb.y2026.common import Grade
 from zeb.y2026.config import Paths  # ruff:ignore[typing-only-first-party-import]
 
 if TYPE_CHECKING:
@@ -35,17 +36,6 @@ class Trend:
     paths: Paths
     emission_reference: Literal['eco2', 'reference'] = 'eco2'
 
-    GRADE: ClassVar[tuple[str, ...]] = (
-        'Existing',
-        'NOPV',
-        'Base',
-        'ZEB5',
-        'ZEB4',
-        'ZEB3',
-        'ZEB2',
-        'ZEB1',
-        'ZEB+',
-    )
     PURPOSE: ClassVar[tuple[str, ...]] = (
         '교육사회',
         '상업',
@@ -78,7 +68,10 @@ class Trend:
         data = (
             pl
             .scan_parquet(self.paths.analysis / '02.emission.parquet')
-            .filter(pl.col('reference') == ref)
+            .filter(
+                pl.col('grade') != Grade.NOPV,
+                pl.col('reference') == ref,
+            )
             .rename({'연면적': 'gfa'})
             .with_columns(pl.col('value').truediv('gfa').alias('requirement'))
             .with_columns(
@@ -110,7 +103,7 @@ class Trend:
 
     @functools.cached_property
     def grade_order(self):
-        return {x: i for i, x in enumerate(self.GRADE)}
+        return {x: i for i, x in enumerate(Grade)}
 
     @functools.cached_property
     def purpose_order(self):
@@ -167,7 +160,7 @@ class Trend:
             )
         )
 
-        width = 0.9
+        width = 0.8
         v, u = self.VAR[variable]
         ylabel = f'Baseline 대비 {v}' if normalize else f'{v} [{u}]'
         p = (
