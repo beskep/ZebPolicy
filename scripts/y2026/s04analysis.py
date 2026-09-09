@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 app = App(
     config=cyclopts.config.Toml(
-        'env.toml', root_keys=['2026', 'paths'], use_commands_as_keys=False
+        'env.toml', root_keys='2026', allow_unknown=True, use_commands_as_keys=False
     )
 )
 logger = structlog.stdlib.get_logger()
@@ -67,7 +67,7 @@ class Trend:
         ]
         data = (
             pl
-            .scan_parquet(self.paths.analysis / '02.emission.parquet')
+            .scan_parquet(self.paths.eco2.analysis / '02.emission.parquet')
             .filter(
                 pl.col('grade') != Grade.NOPV,
                 pl.col('reference') == ref,
@@ -111,7 +111,7 @@ class Trend:
 
     @functools.cached_property
     def output(self):
-        d = self.paths.analysis / 'trend'
+        d = self.paths.eco2.analysis / 'trend'
         d.mkdir(exist_ok=True)
         return d
 
@@ -204,7 +204,7 @@ class Trend:
             desc = self.desc(group)
             g = '+'.join(group)
             desc.write_csv(
-                self.paths.analysis / f'03.describe.{g}.csv', include_bom=True
+                self.paths.eco2.analysis / f'03.describe.{g}.csv', include_bom=True
             )
 
         mpl.rcParams['savefig.dpi'] = 300

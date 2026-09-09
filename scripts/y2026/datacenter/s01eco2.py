@@ -23,6 +23,7 @@ from tqdm.rich import tqdm
 
 from zeb import utils
 from zeb.utils.cli import App
+from zeb.y2026.config import Paths  # ruff: ignore[typing-only-first-party-import]
 
 if TYPE_CHECKING:
     from matplotlib.axes import Axes
@@ -30,7 +31,7 @@ if TYPE_CHECKING:
 app = App(
     config=cyclopts.config.Toml(
         'env.toml',
-        root_keys=['2026', 'datacenter'],
+        root_keys='2026',
         allow_unknown=True,
         use_commands_as_keys=False,
     )
@@ -95,10 +96,17 @@ class _Editor(eco2.editor.Eco2Editor):
 @app.command
 @dc.dataclass
 class EditEco2:
-    src: Path
-    edit: Path
+    paths: Paths
     _: dc.KW_ONLY
     xml: bool = False
+
+    @functools.cached_property
+    def src(self):
+        return self.paths.datacenter.src
+
+    @functools.cached_property
+    def edit(self):
+        return self.paths.datacenter.edit
 
     @functools.cached_property
     def cases(self):
@@ -130,8 +138,7 @@ class EditEco2:
 @app.command
 @dc.dataclass
 class ParseReport:
-    root: Path
-    edit: Path
+    paths: Paths
 
     @staticmethod
     def read(src: Path):
@@ -171,23 +178,25 @@ class ParseReport:
         )
 
     def __call__(self):
-        reports = [self.read(x) for x in self.edit.glob('batchreport*.tab')]
+        paths = self.paths.datacenter
+
+        reports = [self.read(x) for x in paths.edit.glob('batchreport*.tab')]
 
         raw = pl.concat(x.raw for x in reports)
         raw = self.parse_file(raw)
-        raw.write_parquet(self.root / '03.report.raw.parquet')
-        raw.write_excel(self.root / '03.report.raw.xlsx')
+        raw.write_parquet(paths.root / '03.report.raw.parquet')
+        raw.write_excel(paths.root / '03.report.raw.xlsx')
 
         data = pl.concat(x.data for x in reports)
         data = self.parse_file(data)
-        data.write_parquet(self.root / '03.report.tidy.parquet')
-        data.write_excel(self.root / '03.report.tidy.xlsx')
+        data.write_parquet(paths.root / '03.report.tidy.parquet')
+        data.write_excel(paths.root / '03.report.tidy.xlsx')
 
 
 @app.command
 @dc.dataclass
 class EnergyTrend:
-    root: Path
+    paths: Paths
 
     variables: tuple[str, ...] = ('1차에너지소요량', '등급산출용 1차에너지소요량')
 
@@ -196,7 +205,7 @@ class EnergyTrend:
         variables = [f'{x}/합계' for x in self.variables]
         data = (
             pl
-            .scan_parquet(self.root / '03.report.tidy.parquet')
+            .scan_parquet(self.paths.datacenter.root / '03.report.tidy.parquet')
             .filter(pl.col('variable').is_in(variables))
             .with_columns(
                 pl
@@ -265,7 +274,7 @@ class EnergyTrend:
             ax.set_xlabel(f'{v} [{unit}]' if value == 'value' else '원본 대비 비율')
             ax.set_ylabel('')
 
-        fig.savefig(self.root / f'04.{value}.png')
+        fig.savefig(self.paths.datacenter.root / f'04.{value}.png')
 
     def __call__(self):
         utils.mpl.MplTheme().grid().apply()
@@ -274,7 +283,8 @@ class EnergyTrend:
 
 
 @app.command
-def describe(root: Path):
+def describe(paths: Paths):
+    root = paths.datacenter.root
     data = (
         pl
         .scan_parquet(root / '03.report.tidy.parquet')
@@ -352,7 +362,8 @@ def describe(root: Path):
 
 
 @app.command
-def grade(root: Path):
+def grade(paths: Paths):
+    root = paths.datacenter.root
     data = (
         pl
         .scan_parquet(root / '03.report.tidy.parquet')

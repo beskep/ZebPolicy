@@ -10,7 +10,6 @@ import cyclopts
 import eco2
 import polars as pl
 import structlog
-from cyclopts.config import Toml
 from eco2 import editor
 from eco2.editor import set_child_text
 
@@ -26,9 +25,10 @@ if TYPE_CHECKING:
     from lxml.etree import _Element
 
 app = App(
-    config=Toml(
+    config=cyclopts.config.Toml(
         'env.toml',
-        root_keys=['2026', 'paths'],
+        root_keys='2026',
+        allow_unknown=True,
         use_commands_as_keys=False,
     )
 )
@@ -63,7 +63,7 @@ class Copy:
 
     @functools.cached_property
     def dst(self):
-        return self.paths.eco2
+        return self.paths.eco2raw
 
     def copy(self, src: Path, use: Use):
         c = Case.search(src.name)
@@ -341,12 +341,12 @@ class GenExisting:
             c.grade = Grade.EXST
             stem = src.stem.replace('Base', Grade.EXST)
 
-            dst = self.paths.eco2 / use / c.subdir / f'{stem}.tpl'
+            dst = self.paths.eco2raw / use / c.subdir / f'{stem}.tpl'
             _ExistingBldg(src, use=use, case=c, design=design).edit().write(dst)
 
     def __call__(self):
         for use, region in itertools.product(USES, REGIONS):
-            d = self.paths.eco2 / use / f'{Grade.EXST}_{region}'
+            d = self.paths.eco2raw / use / f'{Grade.EXST}_{region}'
             d.mkdir(exist_ok=True)
 
         self.gen('non-res')

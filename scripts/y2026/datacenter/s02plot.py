@@ -1,6 +1,5 @@
 import dataclasses as dc
 import functools
-from pathlib import Path  # ruff:ignore[typing-only-standard-library-import]
 from typing import TYPE_CHECKING, Literal
 
 import cyclopts
@@ -13,6 +12,7 @@ from matplotlib.figure import Figure
 
 from zeb import utils
 from zeb.utils.cli import App
+from zeb.y2026.config import Paths  # ruff: ignore[typing-only-first-party-import]
 
 if TYPE_CHECKING:
     from matplotlib.axes import Axes
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 app = App(
     config=cyclopts.config.Toml(
         'env.toml',
-        root_keys=['2026', 'datacenter'],
+        root_keys='2026',
         allow_unknown=True,
         use_commands_as_keys=False,
     )
@@ -31,14 +31,13 @@ logger = structlog.stdlib.get_logger()
 @app.command
 @dc.dataclass
 class Consumption:
-    root: Path
-    plot: Path
+    paths: Paths
 
     @functools.cached_property
     def data(self):
         return (
             pl
-            .scan_parquet(self.root / '05.consumption.parquet')
+            .scan_parquet(self.paths.datacenter.root / '05.consumption.parquet')
             .filter(
                 pl.col('variable') == '1차에너지소요량',
                 pl.col('function') != '합계',
@@ -98,8 +97,8 @@ class Consumption:
             ax.set_xlabel('')
             ax.set_ylabel('1차에너지소요량 [kWh/m²]')
 
-        fig.savefig(self.plot / f'consumption.{param}.png')
-        fig.savefig(self.plot / f'consumption.{param}.svg')
+        fig.savefig(self.paths.datacenter.plot / f'consumption.{param}.png')
+        fig.savefig(self.paths.datacenter.plot / f'consumption.{param}.svg')
 
     def __call__(self):
         (
@@ -117,8 +116,7 @@ class Consumption:
 @app.command
 @dc.dataclass
 class Visualize:
-    root: Path
-    plot: Path
+    paths: Paths
 
     @functools.cached_property
     def _theme(self):
@@ -128,7 +126,7 @@ class Visualize:
     def data(self):
         return (
             pl
-            .scan_parquet(self.root / '03.report.tidy.parquet')
+            .scan_parquet(self.paths.datacenter.root / '03.report.tidy.parquet')
             .with_columns(
                 pl.col('variable').str.extract_groups(
                     r'^(?<variable>1차에너지소요량)/'
@@ -166,11 +164,11 @@ class Visualize:
         )
 
         fig = p.draw()
-        fig.savefig(self.plot / f'SetTemp.{variable}.png')
-        fig.savefig(self.plot / f'SetTemp.{variable}.svg')
+        fig.savefig(self.paths.datacenter.plot / f'SetTemp.{variable}.png')
+        fig.savefig(self.paths.datacenter.plot / f'SetTemp.{variable}.svg')
 
     def __call__(self):
-        self.plot.mkdir(exist_ok=True)
+        self.paths.datacenter.plot.mkdir(exist_ok=True)
 
         self.plot_set_temperature('TC', 26)
         self.plot_set_temperature('TH', 20)

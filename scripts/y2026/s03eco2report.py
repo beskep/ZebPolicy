@@ -18,7 +18,9 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 app = App(
-    config=Toml('env.toml', root_keys=['2026', 'paths'], use_commands_as_keys=False)
+    config=Toml(
+        'env.toml', root_keys='2026', allow_unknown=True, use_commands_as_keys=False
+    )
 )
 logger = structlog.stdlib.get_logger()
 
@@ -38,15 +40,15 @@ def _read(src: Path):
 @app.command
 def read(*, paths: Paths, batchreport: str = 'batchreport.tab'):
     # 계산 결과가 없는 폴더 체크
-    for d in paths.eco2.glob('**/*/'):
+    for d in paths.eco2raw.glob('**/*/'):
         if not (d / batchreport).exists():
             logger.warning('%s not found: %s', batchreport, d)
 
-    reports = (_read(x) for x in paths.eco2.rglob(batchreport))
+    reports = (_read(x) for x in paths.eco2raw.rglob(batchreport))
     data = pl.concat(reports, how='vertical_relaxed')
 
-    paths.analysis.mkdir(exist_ok=True)
-    data.write_parquet(paths.analysis / '00.raw.parquet')
+    paths.eco2.analysis.mkdir(exist_ok=True)
+    data.write_parquet(paths.eco2.analysis / '00.raw.parquet')
 
     return data
 
@@ -82,11 +84,11 @@ class Parse:
     }
 
     def __call__(self):
-        root = self.paths.analysis
+        root = self.paths.eco2.analysis
         area = ('대지면적', '연면적', '건축면적')
         data = (
             pl
-            .scan_parquet(self.paths.analysis / '00.raw.parquet')
+            .scan_parquet(self.paths.eco2.analysis / '00.raw.parquet')
             .with_columns(
                 pl.col('use').replace_strict({'res': '주거', 'non-res': '비주거'}),
                 pl.col('file').str.extract_groups(comm.Case.PATTERN),
@@ -175,7 +177,7 @@ class Emission:
     }
 
     def __call__(self):
-        root = self.paths.analysis
+        root = self.paths.eco2.analysis
         emission_factors = zeb.emission.EmissionFactors.read().dataframe()
 
         data = (

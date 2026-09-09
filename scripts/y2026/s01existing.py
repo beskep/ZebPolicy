@@ -17,7 +17,8 @@ from zeb.y2026.config import Paths  # ruff:ignore[typing-only-first-party-import
 app = App(
     config=cyclopts.config.Toml(
         'env.toml',
-        root_keys=['2026', 'paths'],
+        root_keys='2026',
+        allow_unknown=True,
         use_commands_as_keys=False,
     )
 )
@@ -40,7 +41,7 @@ class V(enum.StrEnum):
 def prep(paths: Paths):
     data = (
         pl
-        .read_excel(paths.raw / paths.certificates)
+        .read_excel(paths.eco2.raw / paths.certificates)
         .with_columns(
             pl
             .col('인증신청일', '접수일', '인증서 발행일')
@@ -77,12 +78,12 @@ def prep(paths: Paths):
             ).alias(V.HE),
         )
     )
-    paths.existing.mkdir(exist_ok=True)
+    paths.eco2.existing.mkdir(exist_ok=True)
 
     glimpse = data.glimpse(return_type='string')
-    paths.existing.joinpath('00.glimpse.txt').write_text(glimpse)
+    paths.eco2.existing.joinpath('00.glimpse.txt').write_text(glimpse)
 
-    data.write_parquet(paths.existing / '01.raw.parquet')
+    data.write_parquet(paths.eco2.existing / '01.raw.parquet')
 
     return data
 
@@ -94,7 +95,7 @@ class Eda:
 
     @functools.cached_property
     def raw(self):
-        return pl.scan_parquet(self.paths.existing / '01.raw.parquet')
+        return pl.scan_parquet(self.paths.eco2.existing / '01.raw.parquet')
 
     @functools.cached_property
     def data(self):
@@ -114,7 +115,7 @@ class Eda:
                 .describe(interpolation='linear')
                 .with_columns()
                 .write_excel(
-                    self.paths.existing / f'02.describe{suffix}.xlsx',
+                    self.paths.eco2.existing / f'02.describe{suffix}.xlsx',
                     column_widths=150,
                 )
             )
@@ -126,7 +127,7 @@ class Eda:
                     self.data.select(list(V)), group=v, interpolation='linear'
                 )
                 .write_excel(
-                    self.paths.existing / f'02.describe-group-{name}.xlsx',
+                    self.paths.eco2.existing / f'02.describe-group-{name}.xlsx',
                     column_widths=150,
                 )
             )
@@ -144,7 +145,7 @@ class Eda:
         grid = sns.pairplot(
             data.to_pandas(), hue=t, diag_kind='hist', plot_kws={'alpha': 0.8}
         )
-        grid.savefig(self.paths.existing / f'03.grid-{v}.png')
+        grid.savefig(self.paths.eco2.existing / f'03.grid-{v}.png')
 
     def __call__(self):
         self.describe()
