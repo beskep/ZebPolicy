@@ -14,7 +14,7 @@ def _resolve(node: object, root: Path) -> None:
         v = getattr(node, f.name)
         if is_dataclass(v):
             _resolve(v, root)
-        elif f.metadata.get('absolute', False):
+        elif f.type is not Path or f.metadata.get('absolute', False):
             continue
         else:
             setattr(node, f.name, root / v)
@@ -37,6 +37,14 @@ class _DataCenter:
 
 
 @dataclass
+class _Quantity:
+    root: Path = Path('03.quantity')
+    raw: Path = Path('03.quantity/01.raw')
+    data: Path = Path('03.quantity/02.data')
+    eda: Path = Path('03.quantity/03.eda')
+
+
+@dataclass
 class Paths:
     root: Path
 
@@ -47,6 +55,7 @@ class Paths:
     eco2raw: Path = Path('ECO2Raw')  # ECO2 파일 저장, 연산 경로
     eco2: _Eco2 = field(default_factory=_Eco2)
     datacenter: _DataCenter = field(default_factory=_DataCenter)
+    quantity: _Quantity = field(default_factory=_Quantity)
 
     def __post_init__(self) -> None:
         self.root = self.root.expanduser().resolve()
