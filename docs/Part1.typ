@@ -32,7 +32,10 @@
 #show link: it => underline(it)
 #show link: set text(fill: splash.tailwind.sky-800)
 #set strong(delta: 200)
-#show strong: set text(fill: splash.tailwind.sky-950)
+#show strong: set text(fill: splash.tailwind.sky-900)
+#show emph: set text(fill: splash.tailwind.emerald-600)
+
+#show "->": sym.arrow.r.long
 
 #show heading.where(depth: 2): it => {
   context {
@@ -72,33 +75,31 @@
   body: outline(title: none, indent: auto, depth: 2),
 ))
 
-== 분석 데이터
+= 분석 절차
 
-#{
-  set text(size: 16pt)
-  grid(columns: (1fr, 1fr))[
-    + 표준 모델 선정
-      - 2025년 데이터 이용
-    + 성능 평가기준 설정
-      - 2025년 데이터 이용
-    + 기준 에너지절감량 분석
-      + (2025년) 용도, 규모, 주체별 절감률 산정
-      + (2026년) 주거·비주거, 주체별 산정
-    + 물량 분석
-      - #link("https://www.hub.go.kr/portal/opn/lps/idx-lgcpt-pvsn-srvc-list.do")[건축HUB 대용량 데이터] 이용
-      - (2025년) 유형별 *면적* 산정
-      - (2026년) 건물 *유형별 비율*만 분석
-  ][
-    #set enum(start: 5)
+== 분석 절차 & 데이터
 
-    + Baseline 및 성과분석 기준 설정
-      - KEEI "장기 에너지수요전망" 활용 \
-        (2000--2050년 부문별 온실가스 배출 전망 제공)
-    + 시나리오 설정
-    + 연차별 탄소저감 성과 분석
-    + 시나리오 경제성 분석
-  ]
-}
+#columns[
+  #set text(size: 15pt)
+
+  + 표준 모델 선정: _2025년 데이터 이용_
+  + 성능 평가기준 설정: _2025년 데이터 이용_
+  + 기준 에너지절감량 분석
+    + (2025년) 용도, 규모, 주체별 절감률 산정
+    + (2026년) 주거·비주거, 주체별 산정
+  + #strike[_물량 분석_] 비율 분석
+    - #link("https://www.hub.go.kr/portal/opn/lps/idx-lgcpt-pvsn-srvc-list.do")[건축HUB 대용량 데이터] 이용
+      - (2025년) 건물 *유형별 면적* 산정
+      - (2026년) 건물 *유형별 비율*만 분석 (용도, 규모)
+    - 절약계획서 자료 -> 공공#sym.dot.c;민간 비율 추정
+  + Baseline 및 성과분석 기준 설정
+    - *KEEI 2025 장기 에너지 전망*  \
+      (2000--2050년 부문별 온실가스 배출 전망 제공) \
+      -> 연도별 *기준 물량, 기준 원단위 추정* 대체
+  + 시나리오 설정: Soon#sym.trademark
+  + 연차별 탄소저감 성과 분석: Soon#sym.trademark
+  + 시나리오 경제성 분석: Soon#sym.trademark
+]
 
 = ECO2 분석
 
@@ -216,7 +217,7 @@
 
 == 유닛 수 분포
 
-- 세대수 0으로 기록된 공동주택 처리 필요
+- 공동주택 세대수 범위 문제 / 세대수 0으로 기록된 공동주택 처리 필요
 
 #figure(
   caption: [용도별 유닛 수 분포],
@@ -281,3 +282,16 @@
     image("/work/03.quantity/03.eda/02.strata.gfa.use.svg"),
   ),
 )
+
+= Baseline 설정
+
+== KEEI 2025 장기 에너지 전망
+
+- 가정 형태, 서비스 업종별 에너지 수요 참고
+
+#v(2em)
+#two-col[
+  #image("assets/KEEI.가정.png")
+][
+  #image("assets/KEEI.서비스.png")
+]

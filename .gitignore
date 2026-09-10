@@ -12,6 +12,7 @@ wheels/
 # Project
 bin/
 .vscode/
+docs/assets/
 work
 env.toml
 .*.toml
