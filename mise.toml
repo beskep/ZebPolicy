@@ -1,3 +1,4 @@
 [tools]
-prek  = "latest"
-tombi = "latest"
+prek     = "latest"
+tombi    = "latest"
+typstyle = "latest"

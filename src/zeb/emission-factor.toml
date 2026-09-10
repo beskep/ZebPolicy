@@ -1,28 +1,28 @@
 [ECO2]
-'열' = { coefficient = 0.0, unit = "kgCO₂/kWh" }
+"열" = { coefficient = 0.0, unit = "kgCO₂/kWh" }
 
-'전력' = { coefficient = 0.4691, unit = "kgCO₂/kWh" }
-'지역난방' = { coefficient = 0.164, unit = "kgCO₂/kWh" }
-'지역냉방' = { coefficient = 0.140, unit = "kgCO₂/kWh" }
+"전력" = { coefficient = 0.4691, unit = "kgCO₂/kWh" }
+"지역난방" = { coefficient = 0.164, unit = "kgCO₂/kWh" }
+"지역냉방" = { coefficient = 0.140, unit = "kgCO₂/kWh" }
 LNG = { coefficient = 0.202, unit = "kgCO₂/kWh" }
 LPG = { coefficient = 0.227, unit = "kgCO₂/kWh" }
-'등유' = { coefficient = 0.259, unit = "kgCO₂/kWh" }
+"등유" = { coefficient = 0.259, unit = "kgCO₂/kWh" }
 
 # ==============================================================================
 
 [reference]
-'열' = { coefficient = 0.0, unit = "kgCO₂/kWh" }
+"열" = { coefficient = 0.0, unit = "kgCO₂/kWh" }
 
 # ===========================================================================
 # 온실가스 배출권거래제 배출량 보고 및 인증에 관한 지침 별표 6
 # ===========================================================================
 
 # 39. 외부에서 공급된 전기 사용
-'전력' = { coefficient = 0.4567, unit = "tonCO₂/MWh" }
+"전력" = { coefficient = 0.4567, unit = "tonCO₂/MWh" }
 
 # 40. 외부에서 공급된 열(스팀)의 사용 (열전용)
-'지역난방' = { coefficient = 56452, unit = "kgCO₂-eq/TJ" }
-'지역냉방' = { coefficient = 56452, unit = "kgCO₂-eq/TJ" }
+"지역난방" = { coefficient = 56452, unit = "kgCO₂-eq/TJ" }
+"지역냉방" = { coefficient = 56452, unit = "kgCO₂-eq/TJ" }
 
 # ===========================================================================
 # EG-TIPS 에너지온실가스종합정보 플랫폼
@@ -31,4 +31,4 @@ LPG = { coefficient = 0.227, unit = "kgCO₂/kWh" }
 
 LNG = { coefficient = 15.236, unit = "tonC/TJ" }  # 도시가스(LNG)
 LPG = { coefficient = 17.453, unit = "tonC/TJ" }
-'등유' = { coefficient = 19.926, unit = "tonC/TJ" }
+"등유" = { coefficient = 19.926, unit = "tonC/TJ" }
