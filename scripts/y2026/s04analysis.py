@@ -193,6 +193,7 @@ class Trend:
         ax.invert_yaxis()
 
         fig.savefig(self.output / f'{variable}{".ratio" if normalize else ""}.png')
+        fig.savefig(self.output / f'{variable}{".ratio" if normalize else ""}.svg')
 
     def __call__(self):
         for group in (
