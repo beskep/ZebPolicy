@@ -1,18 +1,21 @@
 import functools
 import itertools
 import re
-from dataclasses import KW_ONLY, asdict, dataclass, field
+from dataclasses import KW_ONLY, dataclass
 from typing import TYPE_CHECKING, Literal
 
 import cyclopts
 import matplotlib.pyplot as plt
 import more_itertools as mi
 import polars as pl
+import polars.selectors as cs
+import rich
 import seaborn as sns
 import structlog
 from cmap import Colormap
 from matplotlib.figure import Figure
 
+from zeb import utils
 from zeb.utils.cli import App
 from zeb.y2026.config import Paths  # ruff: ignore[typing-only-first-party-import]
 
@@ -30,22 +33,18 @@ app = App(
 logger = structlog.stdlib.get_logger()
 
 
-class _V:
-    PERMISSION_DATE = '사용승인_일'
-    USE_CODE = '주_용도_코드'
-    USE = '주_용도_코드_명'
-    GFA = '연면적(㎡)'
-
-
-@dataclass
-class Variables:
-    pk: str = '관리_허가대장_PK'
-    date: str = '사용승인_일'
-    use_code: str = '주_용도_코드'
-    use: str = '주_용도_코드_명'
-    gfa: str = '연면적(㎡)'
-    agfa: str = '용적_률_산정_연면적(㎡)'
-    households: str = '세대_수(세대)'
+VARIABLES = {
+    '관리_허가대장_PK': 'pk',
+    '건물_명': 'bldg',
+    '사용승인_일': 'date',
+    '주_용도_코드': 'use.code',
+    '주_용도_코드_명': 'use',
+    '연면적(㎡)': 'gfa',
+    '용적_률_산정_연면적(㎡)': 'gfa.ground',
+    '세대_수(세대)': 'unit.strata',
+    '호_수(호)': 'unit.room',
+    '가구_수(가구)': 'unit.household',
+}
 
 
 @dataclass
@@ -127,13 +126,13 @@ class Parse(_Command):
                 msg = 'name is required'
                 raise ValueError(msg)
 
-            lf = src.lazy()
+            data = src
         else:
-            lf = pl.scan_parquet(src)
+            data = pl.read_parquet(src)
             name = src.stem
 
-        head = lf.head(rows).collect()
-        tail = lf.tail(rows).collect()
+        head = data.head(rows)
+        tail = data.tail(rows)
 
         head.write_csv(self.paths.data / f'{name}.head.csv', include_bom=True)
         tail.write_csv(self.paths.data / f'{name}.tail.csv', include_bom=True)
@@ -142,7 +141,7 @@ class Parse(_Command):
             self.paths.data
             .joinpath(f'{name}.glimpse.txt')
             .joinpath()
-            .write_text(tail.glimpse(return_type='string'))
+            .write_text(data.glimpse(return_type='string', max_items_per_column=4))
         )
 
         if not self.summary:
@@ -176,37 +175,32 @@ class Prep(_Command):
     # XXX: 민간/공공 구분 불가, 전용면적 불명
 
     years: tuple[int, int] = (2021, 2025)
-    variables: Variables = field(default_factory=Variables)
 
     def read(self):
         src = mi.one(self.paths.data.glob('00.*.parquet'))
-        variables = asdict(self.variables)
         return (
             pl
             .scan_parquet(src)
+            .filter(pl.col('건축_구분_코드_명') == '신축')
+            .rename(VARIABLES)
+            .select(list(VARIABLES.values()))
             .with_columns(
-                pl
-                .col(self.variables.date)
-                .str.strip_chars()
-                .str.to_date('%Y%m%d', strict=False)
+                pl.col('date').str.strip_chars().str.to_date('%Y%m%d', strict=False)
             )
-            .filter(pl.col(self.variables.date).dt.year().is_between(*self.years))
-            .select(list(variables.values()))
-            .rename({v: k for k, v in variables.items()})
-            .rename({'use_code': 'use.code'})
             .collect()
         )
 
     def write(self, data: pl.DataFrame):
         data.write_parquet(self.paths.data / '01.data.parquet')
 
+        data = data.drop_nulls('date')
         sample = data.sample(10000, seed=42).sort('pk')
         sample.write_csv(self.paths.data / '01.data.sample.csv', include_bom=True)
         (
             self.paths.data
             .joinpath('01.data.glimpse.txt')
             .joinpath()
-            .write_text(sample.glimpse(return_type='string'))
+            .write_text(data.glimpse(return_type='string'))
         )
 
         (
@@ -221,23 +215,28 @@ class Prep(_Command):
     def __call__(self):
         self.paths.data.mkdir(exist_ok=True)
 
+        data = self.read()
+        logger.info('허가일 인식률')
+        rich.print(
+            data.select(
+                pl.col('date').null_count().alias('null'),
+                pl.col('date').len().alias('total'),
+            ).with_columns(
+                (pl.col('null') / pl.col('total')).alias('r_null'),
+                (1 - pl.col('null') / pl.col('total')).alias('r_normal'),
+            )
+        )
+
         use = pl.read_csv('data/2026/use.csv')
-        columns = [
-            'pk',
-            'date',
-            'use.code',
-            'use.raw',
-            'use',
-            'gfa',
-            'agfa',
-            'households',
-            'scale.a',
-            'scale.c',
-        ]
+        columns = [*VARIABLES.values(), 'scale.a', 'scale.c']
         data = (
-            self
-            .read()
+            data
+            .filter(
+                pl.col('date').dt.year().is_between(*self.years)
+                | pl.col('date').is_null()
+            )
             .rename({'use': 'use.raw'})
+            .drop_nulls(['use.code', 'use.raw'])
             .join(use, on=['use.code', 'use.raw'], how='left', validate='m:1')
             .with_columns(
                 pl
@@ -249,7 +248,7 @@ class Prep(_Command):
                 )
                 .alias('scale.a'),
                 pl
-                .col('households')
+                .col('unit.strata')
                 .cut(
                     [1e-8, 300, 500, 1000],
                     labels=[f'C{x}' for x in range(5)],
@@ -268,20 +267,71 @@ class Prep(_Command):
 @app.command
 @dataclass
 class EDA(_Command):
+    fmt: Literal['svg', 'png'] = 'svg'
+
+    @property
+    def lf(self):
+        return pl.scan_parquet(self.paths.data / '01.data.parquet')
+
     @functools.cached_property
     def data(self):
         return (
-            pl
-            .read_parquet(self.paths.data / '01.data.parquet')
-            .with_columns(pl.col('gfa') / 1000000)
-            .with_columns()
+            self.lf.drop_nulls('date').with_columns(pl.col('gfa') / 1000000).collect()
         )
 
     @functools.cached_property
     def cmap(self):
         return Colormap('cmasher:ocean').to_mpl()
 
-    def _heatmap(self, v: Literal['count', 'gfa'], *, raw: bool = False):
+    def _units(self, xscale: str | None = 'symlog'):
+        data = self.data.unpivot(cs.starts_with('unit.'), index='use').with_columns(
+            pl.col('variable').replace_strict({
+                'unit.strata': '세대',
+                'unit.room': '호',
+                'unit.household': '가구',
+            })
+        )
+
+        if xscale == 'log':
+            data = data.filter(pl.col('value') != 0)
+
+        grid = sns.FacetGrid(
+            data,
+            col='use',
+            col_wrap=3,
+            col_order=['교육사회용', '상업용', '기타', '단독주택', '공동주택'],
+            hue='variable',
+            height=2.5,
+            aspect=4 / 3,
+            sharex=False,
+            sharey=False,
+            despine=False,
+        )
+
+        if xscale:
+            for ax in grid.axes_dict.values():
+                ax.set_xscale(xscale)
+
+        (
+            grid
+            .map_dataframe(sns.histplot, x='value', bins='doane', element='step')
+            .set_axis_labels('유닛 수')
+            .set_titles('')
+            .set_titles('{col_name}', loc='left', weight=500)
+            .add_legend(title='')
+        )
+        utils.mpl.move_grid_legend(grid)
+        grid.figure.savefig(self.paths.eda / f'01.units.{xscale}.{self.fmt}')
+
+    def _heatmap(
+        self,
+        x: Literal['year', 'area', 'strata'],
+        v: Literal['count', 'gfa'],
+        *,
+        raw: bool = False,
+    ):
+        xvar = {'year': 'year', 'area': 'scale.a', 'strata': 'scale.c'}[x]
+
         with plt.rc_context({
             'axes.grid': False,
             'xtick.bottom': False,
@@ -289,7 +339,7 @@ class EDA(_Command):
             'ytick.left': False,
             'ytick.right': False,
         }):
-            fig = Figure(figsize=(32, 24, 'cm') if raw else (16 * 1.2, 9 * 1.2, 'cm'))
+            fig = Figure(figsize=(32, 24, 'cm') if raw else (16, 12, 'cm'))
             ax = fig.subplots()
 
         use = pl.format('{}.{}', 'use.code', 'use.raw') if raw else pl.col('use')
@@ -300,22 +350,22 @@ class EDA(_Command):
                 use.alias('use'),
             )
             .with_columns()
-            .group_by('year', 'use')
+            .group_by(xvar, 'use')
         )
 
         match v:
             case 'count':
                 data = groupby.len('value')
-                title = '허가 건수'
+                title = '신규 허가 건수'
                 fmt = '.0f'
             case 'gfa':
                 data = groupby.agg(pl.sum('gfa').alias('value'))
-                title = '연면적 [km²]'
+                title = '신규 연면적 [km²]'
                 fmt = '.2f'
 
         data = (
             data
-            .pivot('year', index='use', values='value', sort_columns=True)
+            .pivot(xvar, index='use', values='value', sort_columns=True)
             .sort('use')
             .with_columns()
         )
@@ -329,13 +379,43 @@ class EDA(_Command):
         ax.set_title(title, loc='left', weight=500)
 
         ax.set_ylabel('')
-        fig.savefig(self.paths.eda / f'01.{v}{".raw" if raw else ""}.png')
+
+        u = 'raw' if raw else 'use'
+        path = self.paths.eda / f'02.{x}.{v}.{u}.{self.fmt}'
+        fig.savefig(path)
+
+    def _apartment(self):
+        return (
+            self.lf.filter(pl.col('use') == '공동주택').sort('pk').tail(10000).collect()
+        )
 
     def __call__(self):
         self.paths.eda.mkdir(exist_ok=True)
 
-        for v, r in itertools.product(('count', 'gfa'), (False, True)):
-            self._heatmap(v, raw=r)
+        self._units('symlog')
+        self._units('log')
+
+        for x, v, r in itertools.product(
+            ('year', 'area', 'strata'), ('count', 'gfa'), (False, True)
+        ):
+            logger.info('heatmap', x=x, v=v, r=r)
+            self._heatmap(x, v, raw=r)
+
+        self._apartment().write_csv(
+            self.paths.eda / '03.apartment.csv', include_bom=True
+        )
+
+
+@app.command
+def use():
+    return (
+        pl
+        .read_csv('data/2026/use.csv')
+        .group_by('use')
+        .agg(pl.col('use.raw'))
+        .with_columns(pl.col('use.raw').list.join(', '))
+        .to_dicts()
+    )
 
 
 if __name__ == '__main__':
