@@ -106,8 +106,8 @@
     - 주거: 통계청 미래인구추계 *인구증가율*에 비례 가정
     - 비주거: KDI 한국개발연구원 *장기 경제성장률*(--2050)로 추정
 ][
-  #figure(image("destruction.png", width: 6cm), caption: [멸실률])
-  #figure(image("GFA.png", width: 6cm), caption: [연면적 추정 결과])
+  #figure(image("assets/destruction.png", width: 6cm), caption: [멸실률])
+  #figure(image("assets/GFA.png", width: 6cm), caption: [연면적 추정 결과])
 ]
 
 == #shin2025
@@ -184,7 +184,7 @@
     - 대표 모델 분류 기준에 따라 KEEI 통계 분류 후 면적 가중 평균 사용
 ][
   #figure(
-    image("KEEI-residential.png"),
+    image("assets/KEEI-residential.png"),
     caption: [가정 부문 에너지 상품별 \ 수요와 온실가스 배출 전망],
   )
 ]
