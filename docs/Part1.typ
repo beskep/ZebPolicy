@@ -20,11 +20,12 @@
       text: luma(10%),
       muted: rgb("#667477"),
       line: rgb("#b8b1a8"),
-      accent: splash.tailwind.orange-400,
+      accent: splash.tailwind.orange-500,
       warning: rgb("#b58900"),
       error: rgb("#b0413e"),
     )
   ),
+  cells: (footer: align(right, mosaic.components.progress(accent: luma(50%)))),
 )
 
 #show label("mosaic-title-display"): set text(size: 32pt)
@@ -177,12 +178,12 @@
     inset: (x: 20pt, y: 10pt),
     header: ([구분], [연면적 범위 [m²]]),
     (
-      ([A0], $[-infinity, #num[1e-8]]$),
-      ([A1], $[#num[1e-8], 500)$),
-      ([A2], $[500, 1000)$),
-      ([A3], $[1000, 3000)$),
-      ([A4], $[3000, 10000)$),
-      ([A5], $[10000, infinity)$),
+      ([A0], $[-infinity, quad #num[1e-8]]$),
+      ([A1], $[#num[1e-8], quad 500)$),
+      ([A2], $[500, quad 1000)$),
+      ([A3], $[1000, quad 3000)$),
+      ([A4], $[3000, quad 10000)$),
+      ([A5], $[10000, quad infinity)$),
     ).flatten(),
   )
 ][
@@ -192,11 +193,11 @@
     inset: (x: 20pt, y: 10pt),
     header: ([구분], [세대수 범위]),
     (
-      ([C0], $[-infinity, #num[1e-8]]$),
-      ([C1], $[#num[1e-8], 300)$),
-      ([C2], $[300, 500)$),
-      ([C3], $[500, 1000)$),
-      ([C4], $[1000, infinity)$),
+      ([C0], $[-infinity, quad #num[1e-8]]$),
+      ([C1], $[#num[1e-8], quad 300)$),
+      ([C2], $[300, quad 500)$),
+      ([C3], $[500, quad 1000)$),
+      ([C4], $[1000, quad infinity)$),
     ).flatten(),
   )
 ]
