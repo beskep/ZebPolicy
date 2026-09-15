@@ -10,6 +10,7 @@ from cyclopts.config import Toml
 
 import zeb.emission
 import zeb.y2026.common as comm
+from zeb import utils
 from zeb.utils.cli import App
 from zeb.y2026.common import Grade
 from zeb.y2026.config import Paths  # ruff:ignore[typing-only-first-party-import]
@@ -180,6 +181,9 @@ class Emission:
         root = self.paths.eco2.analysis
         emission_factors = zeb.emission.EmissionFactors.read().dataframe()
 
+        fn = pl.col('function')
+        src = pl.col('source')
+
         data = (
             pl
             .scan_parquet(root / '01.parsed.parquet')
@@ -210,30 +214,53 @@ class Emission:
             .with_columns(
                 function=pl
                 .when(pl.col('src2').is_null())
-                .then(pl.col('function'))
+                .then(fn)
                 .otherwise(pl.lit('생산')),
                 source=pl
                 .when(pl.col('src1').is_null())
                 .then(pl.col('src2'))
                 .otherwise(pl.col('src1')),
             )
-            .filter(pl.col('source') != '총량')
+            .filter(src != '총량')
             .drop('src1', 'src2')
             .with_columns(
                 (
                     pl.col('value')
-                    * pl.col('function').replace_strict(
-                        {'생산': -1}, default=1, return_dtype=pl.Float64
-                    )
+                    * fn.replace_strict('생산', -1, default=1, return_dtype=pl.Float64)
                 ).alias('value'),
-                pl.col('source').replace_strict(self.SOURCE),
+                src.replace_strict(self.SOURCE),
+            )
+            .with_columns(
+                pl
+                .format('{}{}', fn.replace_strict('생산', '생산.', default=''), src)
+                .replace_strict({
+                    'LPG': 'direct',
+                    'LNG': 'direct',
+                    '등유': 'direct',
+                    '전력': 'indirect',
+                    '지역난방': 'indirect',
+                    '지역냉방': 'indirect',
+                    '생산.전력': 'generation.elec',
+                    '생산.열': 'generation.heat',
+                })
+                .alias('scope')
             )
             .collect()
             .join(emission_factors, on='source', how='left', validate='m:m')
         )
 
         data.write_parquet(root / '02.emission.parquet')
+        (
+            root
+            .joinpath()
+            .joinpath('02.emission.glimpse.txt')
+            .write_text(data.glimpse(return_type='string'), encoding='utf-8')
+        )
         data.head(1000).write_csv(root / '02.emission.sample.csv', include_bom=True)
+
+        utils.pl.PolarsSummary(data.rename({'variable': 'var'})).write_excel(
+            root / '02.emission.summary.xlsx'
+        )
 
         return data
 
