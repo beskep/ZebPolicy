@@ -147,7 +147,7 @@ class Parse:
         data = pl.concat([
             baseline,
             sub5,
-            data.filter(grade.is_in([Grade.BASE, Grade.SUB5]).not_()),
+            data.filter(grade.is_in([Grade.BASE, Grade.SUB5, Grade.NOPV]).not_()),
         ])
 
         data.write_parquet(root / '01.parsed.parquet')
