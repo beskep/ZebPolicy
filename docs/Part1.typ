@@ -130,6 +130,21 @@
   )
 ]
 
+== 분류 방법별 배출량 평가 결과
+
+#[
+  #set text(size: 0.85em)
+  - 분류 방법에 따라 Baseline 대비 유형별 탄소 배출량 평가
+    - 막대: 대분류 (비주거·주거, 공공·민간)
+    - 점: 소분류 (세부용도, 규모 추가 분류)
+]
+
+#figure(image("/work/01.ECO2/02.analysis/03.reduction.nogen.nodetached.svg", height: 90%))
+
+== 분류 방법별 배출량 평가 결과: 단독주택, 전력 생산량 포함
+
+#figure(image("/work/01.ECO2/02.analysis/03.reduction.generation.detached.svg"))
+
 = 물량 분석: 데이터 전처리
 
 == 건축HUB 데이터 --- 건축인허가 기본개요

@@ -39,6 +39,25 @@ class Grade(enum.StrEnum):
     ZEB1 = 'ZEB1'
     ZEBP = 'ZEB+'
 
+    @classmethod
+    def order(cls):
+        return {x: i for i, x in enumerate(cls)}
+
+    @classmethod
+    def kor(cls):
+        return {
+            cls.EXST: '기존 건물',
+            cls.NOPV: 'NO PV',
+            cls.BASE: 'Baseline',
+            cls.SUB5: '준ZEB5',
+            cls.ZEB5: 'ZEB5',
+            cls.ZEB4: 'ZEB4',
+            cls.ZEB3: 'ZEB3',
+            cls.ZEB2: 'ZEB2',
+            cls.ZEB1: 'ZEB1',
+            cls.ZEBP: 'ZEB+',
+        }
+
 
 @dc.dataclass
 class Case:
