@@ -5,9 +5,11 @@ figure.constrained_layout.use: True
 figure.dpi:  150
 savefig.dpi: 300
 
-axes.edgecolor: 0.2
-axes.grid:      True
-axes.axisbelow: True  # draw axis gridlines and ticks below patches
+axes.edgecolor:     0.2
+axes.grid:          True
+axes.axisbelow:     True  # draw axis gridlines and ticks below patches
+axes.titlelocation: left
+axes.titleweight:   500
 
 grid.color: "#cccccc"
 grid.alpha: 0.8
