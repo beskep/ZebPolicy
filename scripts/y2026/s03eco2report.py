@@ -12,7 +12,7 @@ import zeb.emission
 import zeb.y2026.common as comm
 from zeb import utils
 from zeb.utils.cli import App
-from zeb.y2026.common import Grade
+from zeb.y2026.common import INDEX, Grade
 from zeb.y2026.config import Paths  # ruff:ignore[typing-only-first-party-import]
 
 if TYPE_CHECKING:
@@ -60,20 +60,7 @@ class Parse:
     _: dc.KW_ONLY
     paths: Paths
 
-    INDEX: ClassVar[tuple[str, ...]] = (
-        'bldg',
-        'use',
-        'owner',
-        'scale.c',
-        'scale.a',
-        'purpose',
-        'index',
-        'region',
-        'grade',
-        '대지면적',
-        '연면적',
-        '건축면적',
-    )
+    INDEX: ClassVar[tuple[str, ...]] = INDEX.CASE
     AREA_FIX: ClassVar[dict[str, str]] = {
         '1878.42 // 1549.68': '1549.68',
         '31031.96 // 19726.98': '19726.98',
@@ -164,7 +151,7 @@ class Emission:
     _: dc.KW_ONLY
     paths: Paths
 
-    INDEX: ClassVar[tuple[str, ...]] = Parse.INDEX
+    INDEX: ClassVar[tuple[str, ...]] = INDEX.CASE
     SOURCE: ClassVar[dict[str, str]] = {
         '난방유(등유)': '등유',
         '액화가스(LPG)': 'LPG',

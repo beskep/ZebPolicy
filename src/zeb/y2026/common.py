@@ -10,6 +10,23 @@ USES: tuple[Use, Use] = ('non-res', 'res')
 REGIONS: tuple[Region, Region, Region, Region] = ('중부1', '중부2', '남부', '제주')
 
 
+class INDEX:
+    BUILDING = (
+        'bldg',
+        'use',
+        'owner',
+        'scale.c',
+        'scale.a',
+        'purpose',
+        'index',
+        'region',
+        '대지면적',
+        '연면적',
+        '건축면적',
+    )
+    CASE = (*BUILDING, 'grade')
+
+
 class Grade(enum.StrEnum):
     EXST = 'Existing'
     NOPV = 'NOPV'  # baseline 케이스에서 PV 제거
