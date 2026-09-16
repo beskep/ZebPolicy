@@ -232,8 +232,15 @@ class Emission:
                 })
                 .alias('scope')
             )
+            .rename({'value': 'delivered'})  # kWh
+            .join(emission_factors.lazy(), on='source', how='left', validate='m:m')
+            .with_columns(
+                pl
+                .col('delivered')
+                .mul(pl.col('emission_factor'))
+                .alias('emission'),  # kg
+            )
             .collect()
-            .join(emission_factors, on='source', how='left', validate='m:m')
         )
 
         data.write_parquet(root / '02.emission.parquet')
@@ -245,8 +252,10 @@ class Emission:
         )
         data.head(1000).write_csv(root / '02.emission.sample.csv', include_bom=True)
 
-        utils.pl.PolarsSummary(data.rename({'variable': 'var'})).write_excel(
-            root / '02.emission.summary.xlsx'
+        (
+            (utils.pl)
+            .PolarsSummary(data.rename({'variable': 'var'}))
+            .write_excel(root / '02.emission.summary.xlsx')
         )
 
         return data
