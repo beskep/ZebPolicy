@@ -12,7 +12,7 @@ axes.titlelocation: left
 axes.titleweight:   500
 
 grid.color: "#cccccc"
-grid.alpha: 0.8
+grid.alpha: 0.5
 
 xtick.top:           True
 xtick.minor.visible: True
