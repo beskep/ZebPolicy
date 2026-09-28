@@ -1,4 +1,4 @@
-"""2026-09-28 파이프 길이 기술통계."""
+"""2026-09-28 냉난방설비 미설치 평가기준 - 난방 히트펌프 배관 길이 기술통계."""
 
 import contextlib
 import functools
@@ -9,8 +9,11 @@ from pathlib import Path
 
 import cyclopts
 import fastexcel
+import matplotlib.pyplot as plt
 import more_itertools as mi
 import polars as pl
+import seaborn as sns
+import statsmodels.api as sm
 import structlog
 import xlsxwriter
 from tqdm.rich import tqdm
@@ -139,23 +142,18 @@ class Reader:
         )
 
     def pipe(self, sheet='배관길이_비주거'):
+        pipe = ('배관길이', '최대배관길이', '표준비난방존', '외부')
         with contextlib.redirect_stdout(io.StringIO()):
             self._check_columns(
                 sheet,
                 header_row=2,
-                columns=(
-                    '구분',
-                    '난방기기',
-                    '배관길이',
-                    '최대배관길이',
-                    '표준비난방존',
-                    '외부',
-                ),
+                columns=('구분', '난방기기', *pipe),
             )
             return (
                 (self.reader)
                 .load_sheet_by_name(sheet, header_row=2, use_columns=list(range(1, 7)))
                 .to_polars()
+                .with_columns(pl.col(pipe).cast(pl.Float64, strict=False))
             )
 
     def __call__(self):
@@ -196,7 +194,12 @@ class Reader:
         )
 
 
-app = cyclopts.App()
+app = cyclopts.App(
+    config=cyclopts.config.Toml(
+        'env.toml', root_keys='pipe', use_commands_as_keys=False
+    ),
+    result_action=['call_if_callable', 'print_non_int_sys_exit'],
+)
 
 
 def _extract(src: Path):
@@ -210,8 +213,9 @@ def _extract(src: Path):
         return d
 
 
-@app.default
-def main(src: Path, dst: Path | None = None):
+@app.command
+def parse(root: Path, src: Path | None, dst: Path | None = None):
+    src = src or root / '01.sheets'
     sheets = list(src.glob('*.xlsm'))
 
     results = [_extract(s) for s in tqdm(sheets)]
@@ -220,15 +224,117 @@ def main(src: Path, dst: Path | None = None):
     logger.info('count', sheets=len(sheets), results=len(results))
 
     hp = pl.concat([x.hp for x in results], how='diagonal_relaxed')
-    zone = pl.concat([x.hp for x in results], how='diagonal_relaxed')
-    pipe = pl.concat([x.hp for x in results], how='diagonal_relaxed')
+    zone = pl.concat([x.zone for x in results], how='diagonal_relaxed')
+    pipe = pl.concat([x.pipe for x in results], how='diagonal_relaxed')
 
-    dst = (dst or src.parent) / 'HP.xlsx'
+    dst = (dst or root) / 'HP.parquet'
+    hp.write_parquet(dst)
 
-    with xlsxwriter.Workbook(dst) as wb:
+    with xlsxwriter.Workbook(dst.with_suffix('.xlsx')) as wb:
         hp.write_excel(wb, worksheet='HP')
         zone.write_excel(wb, worksheet='zone')
         pipe.write_excel(wb, worksheet='pipe')
+
+
+def _marginal_boxplot(a, *, vertical: bool = False, **kwargs):
+    kwargs.setdefault('fill', False)
+    kwargs.setdefault('color', '0.3')
+    kwargs.setdefault('linewidth', 0.8)
+    kwargs.setdefault('flierprops', {'alpha': 0.5})
+
+    if vertical:
+        sns.boxplot(y=a, **kwargs)
+    else:
+        sns.boxplot(x=a, **kwargs)
+
+
+@app.command
+@dataclass
+class Eda:
+    root: Path
+    dst: Path = Path('02.EDA')
+    max_capacity: float = 150
+
+    @functools.cached_property
+    def data(self):
+        variables = {
+            'HP:난방용량[kW]': '난방용량',
+            'pipe:최대배관길이': '최대배관길이',
+            'pipe:표준비난방존': '표준비난방존',
+            'pipe:외부': '외부',
+        }
+        return (
+            pl
+            .scan_parquet(self.root / 'HP.parquet')
+            .rename(variables)
+            .select(variables.values())
+            .filter(pl.col('난방용량') <= self.max_capacity)
+            .collect()
+        )
+
+    @functools.cached_property
+    def output(self):
+        d = self.root / self.dst
+        d.mkdir(exist_ok=True)
+        return d
+
+    def _lm(self, v: str):
+        data = self.data.select(v, '난방용량').drop_nulls()
+        summary = (
+            sm
+            .OLS(
+                endog=data[v].to_numpy(),
+                exog=data.select(pl.lit(1).alias('const'), '난방용량').to_numpy(),
+            )
+            .fit()
+            .summary2(xname=['const', 'capacity'])
+            .as_text()
+        )
+        self.output.joinpath(f'{v}.OLS.txt').write_text(summary, encoding='UTF-8')
+
+    def _joint_plot(self, v: str):
+        grid = (
+            sns
+            .JointGrid(self.data, x='난방용량', y=v, height=4, ratio=9)
+            .plot_joint(
+                sns.regplot,
+                scatter_kws={'alpha': 0.25, 's': 5},
+                line_kws={'alpha': 0.8},
+            )
+            .plot_marginals(_marginal_boxplot, data=self.data)
+            .set_axis_labels('난방용량 [kW]', f'{v} [m]')
+        )
+
+        sns.utils.despine(
+            ax=grid.ax_joint, top=False, right=False, left=False, bottom=False
+        )
+        grid.ax_marg_x.set_axis_off()
+        grid.ax_marg_y.set_axis_off()
+
+        grid.savefig(self.output / f'{v}.png')
+        plt.close('all')
+
+    def __call__(self):
+        pipe = ('최대배관길이', '표준비난방존', '외부')
+
+        (
+            self.data
+            .with_columns(
+                pl
+                .col(pipe)
+                .truediv(pl.col('난방용량'))
+                .name.suffix('/난방용량 [m/kW]'),
+            )
+            .rename({'난방용량': '난방용량 [kW]', **{x: f'{x} [m]' for x in pipe}})
+            .describe(percentiles=(0.1, 0.25, 0.5, 0.75, 0.9), interpolation='linear')
+            .write_csv(self.output / 'describe.csv', include_bom=True)
+        )
+
+        plt.style.use('custom.mplstyle')
+
+        for v in pipe:
+            self._lm(v)
+            self._joint_plot(v=v)
 
 
 if __name__ == '__main__':
