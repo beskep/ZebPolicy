@@ -23,6 +23,12 @@ from tqdm.rich import tqdm
 
 
 logger = structlog.stdlib.get_logger()
+app = cyclopts.App(
+    config=cyclopts.config.Toml(
+        'env.toml', root_keys=['non-conditioned', 'pipe'], use_commands_as_keys=False
+    ),
+    result_action=['call_if_callable', 'print_non_int_sys_exit'],
+)
 
 
 @dataclass
@@ -192,14 +198,6 @@ class Reader:
             zone=zone.select(c, pl.all()),
             pipe=pipe.select(c, pl.all()),
         )
-
-
-app = cyclopts.App(
-    config=cyclopts.config.Toml(
-        'env.toml', root_keys='pipe', use_commands_as_keys=False
-    ),
-    result_action=['call_if_callable', 'print_non_int_sys_exit'],
-)
 
 
 def _extract(src: Path):

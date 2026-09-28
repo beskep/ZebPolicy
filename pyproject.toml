@@ -11,6 +11,7 @@ dependencies    = [
   "more-itertools>=11.1.0",
   "msgspec>=0.21.1",
   "numpy>=2.4.6",
+  "openpyxl>=3.1.5",
   "pingouin>=0.6.1",
   "pint>=0.25.3",
   "structlog>=25.5.0",
