@@ -251,6 +251,8 @@ def _marginal_boxplot(a, *, vertical: bool = False, **kwargs):
 class Eda:
     root: Path
     dst: Path = Path('02.EDA')
+
+    height: float = 3
     max_capacity: float = 150
 
     @functools.cached_property
@@ -293,7 +295,7 @@ class Eda:
     def _joint_plot(self, v: str):
         grid = (
             sns
-            .JointGrid(self.data, x='난방용량', y=v, height=4, ratio=9)
+            .JointGrid(self.data, x='난방용량', y=v, height=self.height, ratio=9)
             .plot_joint(
                 sns.regplot,
                 scatter_kws={'alpha': 0.25, 's': 5},
@@ -310,6 +312,7 @@ class Eda:
         grid.ax_marg_y.set_axis_off()
 
         grid.savefig(self.output / f'{v}.png')
+        grid.savefig(self.output / f'{v}.svg')
         plt.close('all')
 
     def __call__(self):
