@@ -4,7 +4,7 @@ import itertools
 import math
 import shutil
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 import cyclopts
 import eco2
@@ -15,7 +15,6 @@ from eco2.editor import set_child_text
 
 from zeb.utils import tqdm
 from zeb.utils.cli import App
-from zeb.y2026 import editor as zeb_editor
 from zeb.y2026 import equipment as eq
 from zeb.y2026.common import REGIONS, USES, Case, Grade, Use
 from zeb.y2026.config import Paths  # ruff:ignore[typing-only-first-party-import]
@@ -353,29 +352,6 @@ class GenExisting:
 
         self.gen('non-res')
         self.gen('res')
-
-
-@app.command
-def all_electric(
-    cmd: Literal['edit-zero', 'parse-report', 'required-pv', 'edit-pv'],
-    /,
-    *,
-    paths: Paths,
-):
-    """전전화 건물 전환 분석."""
-    root = paths.eco2raw / 'all-electric'
-
-    match cmd:
-        case 'edit-zero':  # PV 없는 케이스 생성
-            zeb_editor.EditZeb(root, pv='zero')()
-        case 'parse-report':  # batchreport 해석
-            zeb_editor.ParseReport(root)()
-        case 'required-pv':  # ZEB 요구 PV 면적 계산
-            zeb_editor.RequiredPV(root)()
-        case 'edit-pv':
-            zeb_editor.EditZeb(root, pv='required')()  # 요구 PV 면적 적용 케이스 생성
-        case _:
-            raise NotImplementedError
 
 
 if __name__ == '__main__':

@@ -527,7 +527,7 @@ class _Arguments:
 class EditZeb(_Arguments):
     _: KW_ONLY
 
-    pv: PVArea = 'zero'
+    pv: PVArea
     xml: bool = False
     precision: int = 2
 
@@ -820,4 +820,4 @@ class RequiredPV(_Arguments):
         data.write_csv(output.with_suffix('.csv'), include_bom=True)
 
         pl.Config.set_tbl_cols(20)
-        print(data)
+        return data
