@@ -9,7 +9,7 @@ from zeb.y2026 import editor
 app = App(
     config=cyclopts.config.Toml(
         'env.toml',
-        root_keys=['2026', 'all-electric'],
+        root_keys=['2026', 'all-electric', 'edit'],
         allow_unknown=True,
         use_commands_as_keys=False,
     ),
