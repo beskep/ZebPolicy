@@ -1,4 +1,14 @@
 [tools]
-prek     = "latest"
-tombi    = "latest"
-typstyle = "latest"
+biome = "latest"
+prek  = "latest"
+tombi = "latest"
+
+[tasks]
+[tasks.format]
+run = ["uvx ruff format", "tombi format", "biome format --write"]
+
+[tasks.lint]
+run = ["uvx ruff check --fix", "uvx ty check --fix"]
+
+[tasks.check]
+depends = ["format", "lint"]
