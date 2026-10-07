@@ -1,3 +1,5 @@
+"""전전화 전환 케이스 생성."""
+
 from dataclasses import dataclass
 
 import cyclopts

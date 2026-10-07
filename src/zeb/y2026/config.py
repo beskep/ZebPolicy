@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from zeb.y2026.common import Use
 
+_NULL = Path('[NULL]')
+
 
 def _resolve(node: object, root: Path) -> None:
     if not is_dataclass(node):
@@ -21,11 +23,28 @@ def _resolve(node: object, root: Path) -> None:
 
 
 @dataclass
+class _Existing:
+    raw: Path = Path('00.existing/00.raw')
+    analysis: Path = Path('01.existing/01.analysis')
+
+    certificates: Path = field(metadata={'absolute': True}, default=_NULL)
+
+
+@dataclass
 class _Eco2:
+    non_res: Path = field(metadata={'absolute': True}, default=_NULL)
+    res: Path = field(metadata={'absolute': True}, default=_NULL)
+
     root: Path = Path('01.ECO2')
-    raw: Path = Path('01.ECO2/00.raw')
-    existing: Path = Path('01.ECO2/01.existing')
     analysis: Path = Path('01.ECO2/02.analysis')
+
+    def use(self, use: Use):
+        """2025년 tpl 파일 경로."""
+        match use:
+            case 'non-res':
+                return self.non_res
+            case 'res':
+                return self.res
 
 
 @dataclass
@@ -48,11 +67,9 @@ class _Quantity:
 class Paths:
     root: Path
 
-    certificates: Path = field(metadata={'absolute': True})
-    non_res: Path = field(metadata={'absolute': True})
-    res: Path = field(metadata={'absolute': True})
-
     eco2raw: Path = Path('ECO2Raw')  # ECO2 파일 저장, 연산 경로
+
+    existing: _Existing = field(default_factory=_Existing)
     eco2: _Eco2 = field(default_factory=_Eco2)
     datacenter: _DataCenter = field(default_factory=_DataCenter)
     quantity: _Quantity = field(default_factory=_Quantity)
@@ -60,14 +77,6 @@ class Paths:
     def __post_init__(self) -> None:
         self.root = self.root.expanduser().resolve()
         _resolve(self, self.root)
-
-    def use(self, use: Use):
-        """2025년 tpl 파일 경로."""
-        match use:
-            case 'non-res':
-                return self.non_res
-            case 'res':
-                return self.res
 
 
 if __name__ == '__main__':

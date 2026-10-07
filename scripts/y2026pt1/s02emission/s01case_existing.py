@@ -1,3 +1,5 @@
+"""기존 건물 등급별 케이스 (2025년 계산 결과와 동일)."""
+
 import dataclasses as dc
 import functools
 import itertools
@@ -102,7 +104,7 @@ class Copy:
 
     def copy_batch(self, use: Use, /):
         logger.info(use)
-        root = self.paths.use(use)
+        root = self.paths.eco2.use(use)
         src = sorted(set(root.glob('*.tpl')) | set(root.glob('*.tplx')))
 
         for s in tqdm(src, desc='copy'):
@@ -331,7 +333,7 @@ class GenExisting:
     paths: Paths
 
     def gen(self, use: Use):
-        root = self.paths.use(use)
+        root = self.paths.eco2.use(use)
         source = tuple(root.glob('*Base*.tpl*'))
         design = _Design(use)
 
