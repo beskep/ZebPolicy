@@ -5,10 +5,17 @@ tombi = "latest"
 
 [tasks]
 [tasks.format]
-run = ["uvx ruff format", "tombi format", "biome format --write"]
+run = [
+  "uvx ruff format",
+  "tombi format",
+  "biome format --write",
+]
 
 [tasks.lint]
-run = ["uvx ruff check --fix", "uvx ty check --fix"]
+run = [
+  "uvx ruff check --fix",
+  "uvx ty check --fix",
+]
 
 [tasks.check]
 depends = ["format", "lint"]

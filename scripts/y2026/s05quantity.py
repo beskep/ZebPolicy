@@ -241,18 +241,16 @@ class Prep(_Command):
             .with_columns(
                 pl
                 .col('gfa')
-                .cut(
+                .bin_intervals(
                     [1e-8, 500, 1000, 3000, 10000],
                     labels=[f'A{x}' for x in range(6)],
-                    left_closed=True,
                 )
                 .alias('scale.a'),
                 pl
                 .col('unit.strata')
-                .cut(
+                .bin_intervals(
                     [1e-8, 300, 500, 1000],
                     labels=[f'C{x}' for x in range(5)],
-                    left_closed=True,
                 )
                 .alias('scale.c'),
             )

@@ -388,14 +388,14 @@ def grade(paths: Paths):
         .with_columns(
             pl
             .col('에너지자립률')
-            .cut(
+            .bin_intervals(
                 [20, 40, 60, 80, 100, 120],
                 labels=['6', '5', '4', '3', '2', '1', '0'],
             )
             .alias('grade.eir'),
             pl
             .col('등급1차소요량')
-            .cut(
+            .bin_intervals(
                 [-70, -30, 10, 50, 90, 130],
                 labels=['0', '1', '2', '3', '4', '5', '6'],
             )
