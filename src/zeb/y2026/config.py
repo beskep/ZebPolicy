@@ -19,7 +19,7 @@ def _resolve(node: object, root: Path) -> None:
         elif f.type is not Path or f.metadata.get('absolute', False):
             continue
         else:
-            setattr(node, f.name, root / v)
+            setattr(node, f.name, root.joinpath(v).resolve())
 
 
 @dataclass
@@ -31,12 +31,20 @@ class _Existing:
 
 
 @dataclass
-class _Eco2:
-    non_res: Path = field(metadata={'absolute': True}, default=_NULL)
-    res: Path = field(metadata={'absolute': True}, default=_NULL)
+class _Eco2Raw:
+    root: Path = Path('ECO2Raw')
+    existing: Path = Path('ECO2Raw/01.existing')
+    all_electric: Path = Path('ECO2Raw/02.all-electric')
 
+
+@dataclass
+class _Eco2:
     root: Path = Path('01.ECO2')
-    analysis: Path = Path('01.ECO2/02.analysis')
+    parsed: Path = Path('01.ECO2/01.parsed')  # FIXME
+    analysis: Path = Path('01.ECO2/02.analysis')  # FIXME
+
+    non_res: Path = Path('../../ZebSysImprov/03.eco2/01.비주거/03.PV/cases')
+    res: Path = Path('../../ZebSysImprov/03.eco2/02.주거/04.output-pv-required/cases')
 
     def use(self, use: Use):
         """2025년 tpl 파일 경로."""
@@ -67,7 +75,7 @@ class _Quantity:
 class Paths:
     root: Path
 
-    eco2raw: Path = Path('ECO2Raw')  # ECO2 파일 저장, 연산 경로
+    eco2raw: _Eco2Raw = field(default_factory=_Eco2Raw)  # ECO2 파일 저장, 연산 경로
 
     existing: _Existing = field(default_factory=_Existing)
     eco2: _Eco2 = field(default_factory=_Eco2)

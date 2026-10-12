@@ -1,4 +1,4 @@
-"""기존 건물 등급별 케이스 (2025년 계산 결과와 동일)."""
+"""기존 건물 등급별 케이스."""
 
 import dataclasses as dc
 import functools
@@ -344,12 +344,12 @@ class GenExisting:
             c.grade = Grade.EXST
             stem = src.stem.replace('Base', Grade.EXST)
 
-            dst = self.paths.eco2raw / use / c.subdir / f'{stem}.tpl'
+            dst = self.paths.eco2raw.existing / use / c.subdir / f'{stem}.tpl'
             _ExistingBldg(src, use=use, case=c, design=design).edit().write(dst)
 
     def __call__(self):
         for use, region in itertools.product(USES, REGIONS):
-            d = self.paths.eco2raw / use / f'{Grade.EXST}_{region}'
+            d = self.paths.eco2raw.existing / use / f'{Grade.EXST}_{region}'
             d.mkdir(exist_ok=True)
 
         self.gen('non-res')

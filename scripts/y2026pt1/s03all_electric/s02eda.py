@@ -1,3 +1,9 @@
+"""
+Deprecated.
+
+existing, all-electric 통합 분석할 것.
+"""
+
 import tomllib
 from pathlib import Path
 
@@ -49,11 +55,11 @@ def parse(root: Path):
             pl
             .col('file')
             .str.extract_groups(
-                r'^(?<owner>공|민)'
-                r'(?:-(?:C(?<scale_c>\d)))?-(?:A(?<scale_a>\d))-'
-                r'(?<use>\w)-(?<bldg>\d+)'
+                r'^(?P<owner>공|민)'
+                r'(?:-(?:C(?P<scale_c>\d)))?-(?:A(?P<scale_a>\d))-'
+                r'(?P<use>\w)-(?P<bldg>\d+)'
                 r'(?:_전환)?'
-                r'-(?<region>\w+)-(?<grade>Base|ZEB[1-5\+])-PV.*'
+                r'-(?P<region>\w+)-(?P<grade>Base|ZEB[1-5\+])-PV.*'
             )
             .alias('group')
         )

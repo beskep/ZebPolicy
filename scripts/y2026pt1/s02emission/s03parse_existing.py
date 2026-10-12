@@ -1,12 +1,13 @@
 import dataclasses as dc
+from itertools import chain
 from typing import TYPE_CHECKING, ClassVar
 
 import eco2.report
-import more_itertools as mi
 import polars as pl
 import polars.selectors as cs
 import structlog
 from cyclopts.config import Toml
+from tqdm.rich import tqdm
 
 import zeb.emission
 import zeb.y2026.common as comm
@@ -27,29 +28,45 @@ logger = structlog.stdlib.get_logger()
 
 
 def _read(src: Path):
+    logger.debug(src.as_posix())
+
+    s = src.as_posix()
+    if 'existing' in s:
+        electrification = 'existing'
+    elif 'all-electric' in s:
+        electrification = 'all-electric'
+    else:
+        raise ValueError(s)
+
     try:
-        report = eco2.report.BatchReport(src, kwargs={'encoding': 'UTF-8'}).raw
+        report = eco2.report.BatchReport(src, encoding='utf8').raw
     except UnicodeError, pl.exceptions.ComputeError:
-        report = eco2.report.BatchReport(src, kwargs={'encoding': 'korean'}).raw
+        report = eco2.report.BatchReport(src, encoding='korean').raw
 
-    use = mi.one(x for x in src.parts if x in comm.USES)
-    logger.debug('shape=%s, use=%s, src=%s', report.shape, use, src)
+    logger.debug(
+        'shape=%s, src=%s, electrification=%s', report.shape, src, electrification
+    )
 
-    return report.insert_column(0, pl.lit(use).alias('use'))
+    return report.select(pl.lit(electrification).alias('electrification'), pl.all())
 
 
 @app.command
-def read(*, paths: Paths, batchreport: str = 'batchreport.tab'):
+def read_raw(*, paths: Paths, batchreport: str = 'batchreport.tab'):
+    subdirs = [paths.eco2raw.existing, paths.eco2raw.all_electric]
+
     # 계산 결과가 없는 폴더 체크
-    for d in paths.eco2raw.glob('**/*/'):
+    for d in chain.from_iterable(x.glob('**/') for x in subdirs):
         if not (d / batchreport).exists():
             logger.warning('%s not found: %s', batchreport, d)
 
-    reports = (_read(x) for x in paths.eco2raw.rglob(batchreport))
+    src = list(chain.from_iterable(x.rglob(batchreport) for x in subdirs))
+    reports = (_read(x) for x in tqdm(src))
     data = pl.concat(reports, how='vertical_relaxed')
+    data.write_parquet(paths.eco2.root / '00.raw.parquet')
 
-    paths.eco2.analysis.mkdir(exist_ok=True)
-    data.write_parquet(paths.eco2.analysis / '00.raw.parquet')
+    paths.eco2.root.joinpath('00.raw.glimpse.txt').write_text(
+        data.glimpse(return_type='string')
+    )
 
     return data
 
@@ -72,22 +89,18 @@ class Parse:
     }
 
     def __call__(self):
-        root = self.paths.eco2.analysis
+        root = self.paths.eco2.root
         area = ('대지면적', '연면적', '건축면적')
         data = (
             pl
-            .scan_parquet(self.paths.eco2.analysis / '00.raw.parquet')
-            .with_columns(
-                pl.col('use').replace_strict({'res': '주거', 'non-res': '비주거'}),
-                pl.col('file').str.extract_groups(comm.Case.PATTERN),
-            )
+            .scan_parquet(root / '00.raw.parquet')
+            .with_columns(pl.col('file').str.extract_groups(comm.Case.PATTERN))
             .unnest('file')
             .rename({'scale_a': 'scale.a', 'scale_c': 'scale.c'})
             .with_columns(pl.col('scale.c').fill_null('null'))
             .with_columns(
                 pl.format(
-                    '{}.{}.{}.{}.{}.{}',
-                    pl.col('use').str.slice(0, 1),
+                    '{}.{}.{}.{}.{}',
                     'owner',
                     'scale.a',
                     'scale.c',
@@ -140,7 +153,9 @@ class Parse:
 
         data.write_parquet(root / '01.parsed.parquet')
         data.write_excel(root / '01.parsed.xlsx')
-        root.joinpath('01.glimpse.txt').write_text(data.glimpse(return_type='string'))
+        root.joinpath('01.parsed.glimpse.txt').write_text(
+            data.glimpse(return_type='string')
+        )
 
         return data
 
@@ -165,7 +180,7 @@ class Emission:
     }
 
     def __call__(self):
-        root = self.paths.eco2.analysis
+        root = self.paths.eco2.root
         emission_factors = zeb.emission.EmissionFactors.read().dataframe()
 
         fn = pl.col('function')
@@ -193,7 +208,7 @@ class Emission:
                     r'(?P<function>냉방|난방|급탕|조명|환기)'
                     r'(?:/(?P<src1>[\w()]+))?'
                     r'|(?P<src2>전기|열)에너지 생산량'
-                    r'\((?<renewable>태양광|태양열|열병합|풍력|수열|지열)\)$'
+                    r'\((?P<renewable>태양광|태양열|열병합|풍력|수열|지열)\)$'
                 )
                 .alias('groups')
             )

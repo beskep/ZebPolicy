@@ -12,8 +12,8 @@ REGIONS: tuple[Region, Region, Region, Region] = ('중부1', '중부2', '남부'
 
 class INDEX:
     BUILDING = (
+        'electrification',
         'bldg',
-        'use',
         'owner',
         'scale.c',
         'scale.a',
@@ -71,7 +71,8 @@ class Case:
 
     PATTERN: ClassVar[str] = (
         r'^(?P<owner>\w)(?:-(?P<scale_c>C\d))?-(?P<scale_a>A\d)'
-        r'-(?P<purpose>\w)-(?P<index>\d+)-(?P<region>중부[12]|남부|제주)'
+        r'-(?P<purpose>\w)-(?P<index>\d+)(?:_전환)?'
+        r'-(?P<region>중부[12]|남부|제주)'
         r'-(?P<grade>ZEB[+1-5]|Existing|Base|NOPV)'
     )
 
