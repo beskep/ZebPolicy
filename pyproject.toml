@@ -50,6 +50,7 @@ build-backend = "uv_build"
 [tool.ruff]
 preview       = true
 output-format = "concise"
+exclude       = ["src/zeb/utils"]
 
 [tool.ruff.format]
 quote-style           = "single"
