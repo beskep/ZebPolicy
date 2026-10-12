@@ -1,4 +1,4 @@
-import datetime
+import datetime as dt
 
 import polars as pl
 import pytest
@@ -7,7 +7,7 @@ import zeb.roadmap.classification as clsf
 
 
 def _to_date(text: str):
-    return datetime.date.fromisoformat(text)
+    return dt.date.fromisoformat(text)
 
 
 @pytest.mark.parametrize(
