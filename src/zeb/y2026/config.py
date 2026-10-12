@@ -40,8 +40,7 @@ class _Eco2Raw:
 @dataclass
 class _Eco2:
     root: Path = Path('01.ECO2')
-    parsed: Path = Path('01.ECO2/01.parsed')  # FIXME
-    analysis: Path = Path('01.ECO2/02.analysis')  # FIXME
+    report: Path = Path('01.ECO2/01.report')
 
     non_res: Path = Path('../../ZebSysImprov/03.eco2/01.비주거/03.PV/cases')
     res: Path = Path('../../ZebSysImprov/03.eco2/02.주거/04.output-pv-required/cases')
@@ -56,19 +55,19 @@ class _Eco2:
 
 
 @dataclass
-class _DataCenter:
-    root: Path = Path('02.datacenter')
-    src: Path = Path('02.datcenter/src')
-    edit: Path = Path('02.datcenter/edit')
-    plot: Path = Path('02.datcenter/plot')
+class _Quantity:
+    root: Path = Path('02.quantity')
+    raw: Path = Path('02.quantity/01.raw')
+    data: Path = Path('02.quantity/02.data')
+    eda: Path = Path('02.quantity/03.eda')
 
 
 @dataclass
-class _Quantity:
-    root: Path = Path('03.quantity')
-    raw: Path = Path('03.quantity/01.raw')
-    data: Path = Path('03.quantity/02.data')
-    eda: Path = Path('03.quantity/03.eda')
+class _DataCenter:
+    root: Path = Path('99.datacenter')
+    src: Path = Path('99.datcenter/src')
+    edit: Path = Path('99.datcenter/edit')
+    plot: Path = Path('99.datcenter/plot')
 
 
 @dataclass
@@ -79,8 +78,9 @@ class Paths:
 
     existing: _Existing = field(default_factory=_Existing)
     eco2: _Eco2 = field(default_factory=_Eco2)
-    datacenter: _DataCenter = field(default_factory=_DataCenter)
     quantity: _Quantity = field(default_factory=_Quantity)
+
+    datacenter: _DataCenter = field(default_factory=_DataCenter)
 
     def __post_init__(self) -> None:
         self.root = self.root.expanduser().resolve()
