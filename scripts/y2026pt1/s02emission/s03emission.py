@@ -66,11 +66,11 @@ def read_raw(*, paths: Paths, batchreport: str = 'batchreport.tab'):
     src = list(chain.from_iterable(x.rglob(batchreport) for x in subdirs))
     reports = (_read(x) for x in tqdm(src))
     data = pl.concat(reports, how='vertical_relaxed')
-    data.write_parquet(paths.eco2.root / '00.raw.parquet')
 
-    paths.eco2.root.joinpath('00.raw.glimpse.txt').write_text(
-        data.glimpse(return_type='string')
-    )
+    root = paths.eco2.root
+    data.write_parquet(root / '00.raw.parquet')
+    data.write_csv(root / '00.raw.csv', include_bom=True)
+    root.joinpath('00.raw.glimpse.txt').write_text(data.glimpse(return_type='string'))
 
     return data
 
@@ -158,6 +158,9 @@ class Parse:
             .filter(grade == Grade.BASE)
             .with_columns(pl.lit(Grade.SUB5).alias('grade'))
         )
+        if baseline.height != sub5.height:
+            raise ValueError(baseline.shape, sub5.shape)
+
         zeb = data.filter(grade.is_in([Grade.BASE, Grade.SUB5, Grade.NOPV]).not_())
         data = (
             pl

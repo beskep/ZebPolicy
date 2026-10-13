@@ -533,6 +533,7 @@ class EditZeb(_Arguments):
 
     grades: tuple[Grade, ...] = (
         Grade.BASE,
+        Grade.NOPV,
         Grade.ZEB5,
         Grade.ZEB4,
         Grade.ZEB3,
@@ -615,12 +616,14 @@ class EditZeb(_Arguments):
 
     def edit(self, case: _Case):
         setting = self.filter_setting(
-            scale=case.scale, region=case.region, grade=case.grade
+            scale=case.scale,
+            region=case.region,
+            grade=Grade.BASE if case.grade == Grade.NOPV else case.grade,
         )
         if not setting.height:
             raise EditorError(case)
 
-        pv = self._pv_area(case)
+        pv = 0 if case.grade == Grade.NOPV else self._pv_area(case)
 
         suffix = 'PvNotRequired' if pv < 0 else 'PV'
         output = self.output / case.grade / f'{case}-PV.{self.pv}-{suffix}.tpl'
