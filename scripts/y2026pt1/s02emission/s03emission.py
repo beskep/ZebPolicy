@@ -32,9 +32,9 @@ def _read(src: Path):
 
     s = src.as_posix()
     if 'existing' in s:
-        electrification = 'existing'
+        electrification = '기존'
     elif 'all-electric' in s:
-        electrification = 'all-electric'
+        electrification = '전환'
     else:
         raise ValueError(s)
 
@@ -47,7 +47,11 @@ def _read(src: Path):
         'shape=%s, src=%s, electrification=%s', report.shape, src, electrification
     )
 
-    return report.select(pl.lit(electrification).alias('electrification'), pl.all())
+    return report.select(
+        pl.lit(src.as_posix()).alias('src'),
+        pl.lit(electrification).alias('electrification'),
+        pl.all(),
+    )
 
 
 @app.command
@@ -94,27 +98,36 @@ class Parse:
         data = (
             pl
             .scan_parquet(root / '00.raw.parquet')
-            .with_columns(pl.col('file').str.extract_groups(comm.Case.PATTERN))
-            .unnest('file')
+            .with_columns(
+                pl.col('file').str.extract_groups(comm.Case.PATTERN).alias('group')
+            )
+            .unnest('group')
             .rename({'scale_a': 'scale.a', 'scale_c': 'scale.c'})
-            .with_columns(pl.col('scale.c').fill_null('null'))
             .with_columns(
                 pl.format(
                     '{}.{}.{}.{}.{}',
                     'owner',
                     'scale.a',
-                    'scale.c',
+                    pl.col('scale.c').fill_null('N'),
                     'purpose',
                     'index',
                 ).alias('bldg'),
-                pl.col('owner').replace_strict({'공': '공공', '민': '민간'}),
-                pl.col('purpose').replace_strict({
+                pl.col('electrification').cast(pl.Enum(comm.ELECTRIFICATION)),
+                pl
+                .col('owner')
+                .replace_strict({'공': '공공', '민': '민간'})
+                .cast(pl.Enum(comm.OWNER)),
+                pl
+                .col('purpose')
+                .replace_strict({
                     '기': '기타',
                     '상': '상업',
                     '교': '교육사회',
                     '공': '공동주택',
                     '단': '단독주택',
-                }),
+                })
+                .cast(pl.Enum(comm.PURPOSE)),
+                pl.col('region').cast(pl.Enum(comm.REGIONS)),
                 pl.col('index').cast(pl.UInt8),
                 pl.col(area).cast(pl.String).name.suffix('_원본'),
                 pl
@@ -124,7 +137,7 @@ class Parse:
                 .replace(self.AREA_FIX)
                 .cast(pl.Float64),
             )
-            .select(*self.INDEX, pl.all().exclude(self.INDEX))
+            .select('src', *self.INDEX, pl.all().exclude([*self.INDEX, 'src']))
             .sort(pl.all())
             .collect()
         )
@@ -145,11 +158,13 @@ class Parse:
             .filter(grade == Grade.BASE)
             .with_columns(pl.lit(Grade.SUB5).alias('grade'))
         )
-        data = pl.concat([
-            baseline,
-            sub5,
-            data.filter(grade.is_in([Grade.BASE, Grade.SUB5, Grade.NOPV]).not_()),
-        ])
+        zeb = data.filter(grade.is_in([Grade.BASE, Grade.SUB5, Grade.NOPV]).not_())
+        data = (
+            pl
+            .concat([baseline, sub5, zeb])
+            .with_columns(pl.col('grade').cast(pl.Enum([x.value for x in Grade])))
+            .with_columns()
+        )
 
         data.write_parquet(root / '01.parsed.parquet')
         data.write_excel(root / '01.parsed.xlsx')
@@ -265,7 +280,12 @@ class Emission:
             .joinpath('02.emission.glimpse.txt')
             .write_text(data.glimpse(return_type='string'), encoding='utf-8')
         )
-        data.head(1000).write_csv(root / '02.emission.sample.csv', include_bom=True)
+        (
+            data
+            .filter(pl.col('bldg') == '공.A1.N.교.1')
+            .with_columns()
+            .write_csv(root / '02.emission.sample.csv', include_bom=True)
+        )
 
         (
             (utils.pl)

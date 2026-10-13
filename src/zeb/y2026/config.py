@@ -34,7 +34,7 @@ class _Existing:
 class _Eco2Raw:
     root: Path = Path('ECO2Raw')
     existing: Path = Path('ECO2Raw/01.existing')
-    all_electric: Path = Path('ECO2Raw/02.all-electric')
+    all_electric: Path = Path('ECO2Raw/02.all-electric/03.pv.required')
 
 
 @dataclass

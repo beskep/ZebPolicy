@@ -4,9 +4,21 @@ import re
 from typing import ClassVar, Literal
 
 Use = Literal['non-res', 'res']
+Electrification = Literal['기존', '전환']
+Owner = Literal['공공', '민간']
+Purpose = Literal['공동주택', '단독주택', '상업', '교육사회', '기타']
 Region = Literal['중부1', '중부2', '남부', '제주']
 
 USES: tuple[Use, Use] = ('non-res', 'res')
+ELECTRIFICATION: tuple[Electrification, Electrification] = ('기존', '전환')
+OWNER: tuple[Owner, Owner] = ('공공', '민간')
+PURPOSE: tuple[Purpose, Purpose, Purpose, Purpose, Purpose] = (
+    '공동주택',
+    '단독주택',
+    '상업',
+    '교육사회',
+    '기타',
+)
 REGIONS: tuple[Region, Region, Region, Region] = ('중부1', '중부2', '남부', '제주')
 
 
@@ -62,7 +74,7 @@ class Grade(enum.StrEnum):
 @dc.dataclass
 class Case:
     owner: str
-    purpose: str
+    purpose: Purpose
     index: int
     region: Region
     grade: Grade
