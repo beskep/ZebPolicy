@@ -2,8 +2,13 @@
 biome = "latest"
 prek  = "latest"
 tombi = "latest"
+typos = "latest"
 
 [tasks]
+"lint:ruff"  = "uvx ruff check --fix"
+"lint:ty"    = "uvx ty check --fix"
+"lint:typos" = "typos"
+
 [tasks.format]
 run = [
   "uvx ruff format",
@@ -12,10 +17,7 @@ run = [
 ]
 
 [tasks.lint]
-run = [
-  "uvx ruff check --fix",
-  "uvx ty check --fix",
-]
+depends = ["lint:*"]
 
 [tasks.check]
-depends = ["format", "lint"]
+run = [{ task = "format" }, { task = "lint" }]
