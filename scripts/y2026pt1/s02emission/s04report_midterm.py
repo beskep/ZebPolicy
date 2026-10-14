@@ -18,7 +18,15 @@ from matplotlib.figure import Figure
 
 from zeb import utils
 from zeb.utils.cli import App
-from zeb.y2026.common import INDEX, PURPOSE, Electrification, Grade, Owner, Purpose
+from zeb.y2026.common import (
+    INDEX,
+    PURPOSE,
+    Electrification,
+    Grade,
+    Owner,
+    Purpose,
+    Region,
+)
 from zeb.y2026.config import Paths  # ruff:ignore[typing-only-first-party-import]
 
 if TYPE_CHECKING:
@@ -154,7 +162,11 @@ class _Command:
 
     @property
     def output(self):
-        d = self.paths.eco2.report / self.PREFIX
+        d = (
+            self.paths.eco2.report / self.PREFIX
+            if self.PREFIX
+            else self.paths.eco2.report
+        )
         d.mkdir(exist_ok=True)
         return d
 
@@ -241,6 +253,8 @@ class Baseline(_Command):
 @app.command
 @dataclass
 class ByGrade(_Command):
+    figsize: tuple[float, float] = (13.5, 11.5)
+
     PREFIX: ClassVar[str] = '02.등급별배출량'
 
     @functools.cached_property
@@ -612,6 +626,23 @@ def run(paths: Paths):
         Convert(paths, outlier=outlier)()
 
     move_png(paths)
+
+
+@app.command
+@dataclass
+class ConvertExample(_Command):
+    bldg: str = '공.A2.N.상.2'
+    grade: Grade = Grade.ZEB5
+    region: Region = '중부2'
+
+    def __call__(self):
+        data = self._raw.filter(
+            pl.col('bldg') == self.bldg,
+            pl.col('grade') == self.grade,
+            pl.col('region') == self.region,
+        ).collect()
+        data.write_csv(self.output / 'convert-example.csv', include_bom=True)
+        return data
 
 
 if __name__ == '__main__':
