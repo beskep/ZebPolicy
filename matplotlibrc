@@ -27,8 +27,7 @@ ytick.labelcolor:    0
 ytick.direction:     in
 
 font.family:     sans-serif
-font.serif:      Noto Serif KR, Source Han Serif KR, DejaVu Serif, Bitstream Vera Serif, Computer Modern Roman, New Century Schoolbook, Century Schoolbook L, Utopia, ITC Bookman, Bookman, Nimbus Roman No9 L, Times New Roman, Times, Palatino, Charter, serif
-font.sans-serif: Noto Sans KR, Source Han Sans KR, DejaVu Sans, Bitstream Vera Sans, Computer Modern Sans Serif, Lucida Grande, Verdana, Geneva, Lucid, Arial, Helvetica, Avant Garde, sans-serif
-font.monospace:  DejaVu Sans Mono, Bitstream Vera Sans Mono, Computer Modern Typewriter, Andale Mono, Nimbus Mono L, Courier New, Courier, Fixed, Terminal, monospace
+font.serif:      Noto Serif KR, Source Han Serif KR, DejaVu Serif, serif
+font.sans-serif: Noto Sans KR, Source Han Sans KR, DejaVu Sans, sans-serif
 
 mathtext.fontset: cm  # dejavusans, cm, stix, stixsans, custom

@@ -331,8 +331,6 @@ class Eda:
             .write_csv(self.output / 'describe.csv', include_bom=True)
         )
 
-        plt.style.use('custom.mplstyle')
-
         for v in pipe:
             self._lm(v)
             self._joint_plot(v=v)

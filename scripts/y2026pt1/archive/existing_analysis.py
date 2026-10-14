@@ -380,5 +380,4 @@ class Trend:
 
 
 if __name__ == '__main__':
-    plt.style.use('custom.mplstyle')
     app()

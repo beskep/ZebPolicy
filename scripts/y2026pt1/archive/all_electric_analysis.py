@@ -94,7 +94,6 @@ def check_eir(root: Path):
         .collect()
     )
 
-    plt.style.use('custom.mplstyle')
     fig = Figure()
     ax = fig.subplots()
 

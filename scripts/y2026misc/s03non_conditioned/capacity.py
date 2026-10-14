@@ -198,8 +198,6 @@ class Eda:
     def __call__(self):
         self.describe()
 
-        plt.style.use('custom.mplstyle')
-
         with plt.rc_context({
             'ytick.left': False,
             'ytick.right': False,
