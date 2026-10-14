@@ -161,7 +161,7 @@ class Preprocess:
         if additional is not None:
             rich.print(additional)
             rich.print(data)
-            logger.info('builidng.shape={}', data.shape)
+            logger.info('building.shape={}', data.shape)
             logger.info('energy.building.shape={}', additional.shape)
             data = data.join(
                 additional,
