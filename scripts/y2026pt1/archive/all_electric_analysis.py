@@ -8,7 +8,6 @@ import tomllib
 from pathlib import Path
 
 import cyclopts
-import matplotlib.pyplot as plt
 import polars as pl
 import seaborn as sns
 import structlog

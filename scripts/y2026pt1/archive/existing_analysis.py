@@ -43,7 +43,7 @@ class Reduction:
         reference = 'ECO2' if self.reference == 'eco2' else 'reference'
         data = (
             pl
-            .scan_parquet(self.paths.eco2.analysis / '02.emission.parquet')
+            .scan_parquet(self.paths.eco2.root / 'analysis/02.emission.parquet')
             .filter(pl.col('reference') == reference)
             .with_columns(
                 pl
@@ -85,7 +85,7 @@ class Reduction:
         )
 
     def data(self):
-        if (cache := self.paths.eco2.analysis / '03.group.parquet').exists():
+        if (cache := self.paths.eco2.root / 'analysis/03.group.parquet').exists():
             return pl.read_parquet(cache)
 
         # TODO: 단독주택 제외하고 계산
@@ -187,7 +187,9 @@ class Reduction:
 
         gen = 'generation' if generation else 'nogen'
         det = 'detached' if detached else 'nodetached'
-        fig.savefig(self.paths.eco2.analysis / f'03.reduction.{gen}.{det}.{self.fmt}')
+        fig.savefig(
+            self.paths.eco2.root / f'analysis/03.reduction.{gen}.{det}.{self.fmt}'
+        )
 
     def __call__(self):
         self.plot(generation=True, detached=True)
@@ -233,7 +235,7 @@ class Trend:
         ]
         data = (
             pl
-            .scan_parquet(self.paths.eco2.analysis / '02.emission.parquet')
+            .scan_parquet(self.paths.eco2.root / 'analysis/02.emission.parquet')
             .filter(pl.col('reference') == ref)
             .rename({'연면적': 'gfa'})
             .with_columns(pl.col('value').truediv('gfa').alias('requirement'))
@@ -274,7 +276,7 @@ class Trend:
 
     @functools.cached_property
     def output(self):
-        d = self.paths.eco2.analysis / 'trend'
+        d = self.paths.eco2.root / 'analysis/trend'
         d.mkdir(exist_ok=True)
         return d
 
@@ -369,7 +371,8 @@ class Trend:
             desc = self.desc(group)
             g = '+'.join(group)
             desc.write_csv(
-                self.paths.eco2.analysis / f'04.describe.{g}.csv', include_bom=True
+                self.paths.eco2.root / f'analysis/04.describe.{g}.csv',
+                include_bom=True,
             )
 
         mpl.rcParams['savefig.dpi'] = 300
