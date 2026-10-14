@@ -2,6 +2,7 @@
 
 import functools
 import itertools
+import shutil
 from dataclasses import KW_ONLY, dataclass
 from typing import TYPE_CHECKING, ClassVar, Literal
 
@@ -12,11 +13,12 @@ import seaborn as sns
 import structlog
 from cmap import Colormap
 from cyclopts.config import Toml
+from matplotlib import patheffects
 from matplotlib.figure import Figure
 
 from zeb import utils
 from zeb.utils.cli import App
-from zeb.y2026.common import INDEX, PURPOSE, Electrification, Grade
+from zeb.y2026.common import INDEX, PURPOSE, Electrification, Grade, Owner, Purpose
 from zeb.y2026.config import Paths  # ruff:ignore[typing-only-first-party-import]
 
 if TYPE_CHECKING:
@@ -36,9 +38,9 @@ app = App(
 logger = structlog.stdlib.get_logger()
 
 
-def _describe(name: str = 'emission/gfa') -> pl.Expr:
+def _describe(name: str = 'emission/gfa'):
     c = pl.col(name)
-    return pl.struct(
+    return [
         c.len().name.suffix(':len'),
         c.count().name.suffix(':count'),
         c.null_count().name.suffix(':null_count'),
@@ -49,13 +51,13 @@ def _describe(name: str = 'emission/gfa') -> pl.Expr:
         c.median().name.suffix(':median'),
         c.quantile(0.75, interpolation='linear').name.suffix(':Q3'),
         c.max().name.suffix(':max'),
-    ).struct.unnest()
+    ]
 
 
 @app.command
 def check_heat_generation(paths: Paths):
     pl.Config.set_tbl_cols(50)
-    # TODO: ECO2 열 배출계수 0
+    # NOTE: ECO2 열 배출계수 0
     return (
         pl
         .scan_parquet(paths.eco2.root / '02.emission.parquet')
@@ -75,9 +77,13 @@ class _Command:
     _: KW_ONLY
 
     outlier: bool = False
+    figsize: tuple[float, float] = (25, 9.5)
 
     PREFIX: ClassVar[str] = ''
     OUTLIERS: ClassVar[tuple[str, ...]] = ('공.A2.N.교.2',)
+
+    EXCLUDE_GRADE: ClassVar[tuple[Grade, ...]] = (Grade.NOPV, Grade.EXST)
+    EXCLUDE_PURPOSE: ClassVar[tuple[Purpose, ...]] = ('단독주택',)
 
     def __post_init__(self):
         logger.info(self.__class__.__name__, outlier=self.outlier)
@@ -99,6 +105,7 @@ class _Command:
             raw = self._raw.filter(pl.col('bldg').is_in(self.OUTLIERS).not_())
 
         grade = {
+            Grade.EXST: '기존',
             Grade.BASE: 'Base',
             Grade.SUB5: '준ZEB5',
             Grade.ZEB5: 'ZEB5',
@@ -110,7 +117,10 @@ class _Command:
         }
         return (
             raw
-            .filter(pl.col('grade').is_in([Grade.EXST, Grade.NOPV]).not_())
+            .filter(
+                pl.col('grade').is_in(self.EXCLUDE_GRADE).not_(),
+                pl.col('purpose').is_in(self.EXCLUDE_PURPOSE).not_(),
+            )
             .with_columns(
                 pl
                 .col('scope')
@@ -124,13 +134,17 @@ class _Command:
                 .cast(pl.Enum(['간접', '직접'])),
             )
             .group_by(*INDEX.CASE, 'scope')
-            .agg(pl.sum('emission'))
+            .agg(pl.sum('delivered', 'emission'))
             .with_columns(
                 pl
                 .col('grade')
                 .replace_strict(grade)
                 .cast(pl.Enum(list(grade.values())))
                 .alias('grade.kor'),
+                pl
+                .col('delivered')
+                .truediv(pl.col('연면적'))
+                .alias('delivered/gfa'),  # kWh/m²
                 pl
                 .col('emission')
                 .truediv(pl.col('연면적'))
@@ -140,7 +154,9 @@ class _Command:
 
     @property
     def output(self):
-        return self.paths.eco2.report
+        d = self.paths.eco2.report / self.PREFIX
+        d.mkdir(exist_ok=True)
+        return d
 
     @property
     def _suffix(self):
@@ -150,8 +166,6 @@ class _Command:
 @app.command
 @dataclass
 class Baseline(_Command):
-    figsize: tuple[float, float] = (25, 9.5)
-
     PREFIX: ClassVar[str] = '01.Base배출량'
 
     @functools.cached_property
@@ -169,11 +183,14 @@ class Baseline(_Command):
             .collect()
         )
 
-    def plot(self, elec: Electrification):
+    def plot(self, elec: Electrification, y: Literal['scale', 'owner']):
         data = (
             self.data
             .filter(pl.col('electrification') == elec)
-            .with_columns(pl.format('{} {}', 'purpose', 'scale').alias('purpose-scale'))
+            .with_columns(
+                pl.format('{} {}', 'purpose', 'scale').alias('purpose-scale'),
+                pl.format('{} {}', 'purpose', 'owner').alias('purpose-owner'),
+            )
             .sort('purpose', 'scale')
         )
 
@@ -184,9 +201,9 @@ class Baseline(_Command):
         ax: Axes
         for ax, scope in zip(axes, ('직접', '간접'), strict=True):
             sns.barplot(
-                data.filter(pl.col('scope') == scope).to_pandas(),
+                data.filter(pl.col('scope') == scope).to_dict(),
                 x='emission/gfa',
-                y='purpose-scale',
+                y=f'purpose-{y}',
                 hue='purpose',
                 ax=ax,
                 dodge=False,
@@ -199,29 +216,31 @@ class Baseline(_Command):
             ax.set_ylabel('')
             ax.set_xlabel('탄소 배출량 [kg/m²yr]')
 
-        self.output.mkdir(exist_ok=True)
-        fig.savefig(self.output / f'{self.PREFIX}-{elec}{self._suffix}.svg')
+        path = self.output / f'{self.PREFIX}-{elec}-{y}{self._suffix}.svg'
+        fig.savefig(path)
+        fig.savefig(path.with_suffix('.png'))
 
     def __call__(self):
-        self.plot('기존')
-        self.plot('전환')
+        for y in ('scale', 'owner'):
+            self.plot('기존', y=y)
+            self.plot('전환', y=y)
 
-        (
-            self.data
-            .group_by('electrification', 'purpose', 'scale', 'scope')
-            .agg(_describe())
-            .sort(pl.all())
-            .write_csv(
-                self.output / f'{self.PREFIX}-stat{self._suffix}.csv', include_bom=True
+        for g in (('owner', 'scale'), ('owner',), ('scale',)):
+            (
+                self.data
+                .group_by('electrification', 'purpose', *g, 'scope')
+                .agg(_describe())
+                .sort(pl.all())
+                .write_csv(
+                    self.output / f'{self.PREFIX}-stat-{"-".join(g)}{self._suffix}.csv',
+                    include_bom=True,
+                )
             )
-        )
 
 
 @app.command
 @dataclass
 class ByGrade(_Command):
-    figsize: tuple[float, float] = (25, 9.5)
-
     PREFIX: ClassVar[str] = '02.등급별배출량'
 
     @functools.cached_property
@@ -252,7 +271,12 @@ class ByGrade(_Command):
 
         return data
 
-    def plot(self, elec: Electrification, value: Literal['value', 'delta']):
+    def plot(
+        self,
+        elec: Electrification,
+        value: Literal['value', 'delta'],
+        owner: Owner | None = None,
+    ):
         existing = elec == '기존'
         delta = value == 'delta'
 
@@ -272,58 +296,184 @@ class ByGrade(_Command):
             .with_columns()
         )
 
+        if owner:
+            data = data.filter(pl.col('owner') == owner)
+
         with plt.rc_context({'ytick.left': False, 'ytick.right': False}):
             fig = Figure(figsize=(*self.figsize, 'cm'))
-            axes = fig.subplots(
-                *((2, 3) if existing else (2, 2)),
-                squeeze=False,
-                sharex=True,
-            )
+            axes = fig.subplots(2, 2, squeeze=False, sharex=True)
 
-        purpose = PURPOSE if existing else ('상업', '교육사회', '기타')
+        purpose = [x for x in PURPOSE if x in data['purpose'].unique()]
+        purpose = [*purpose, '전체']
+
         xlabel = 'Base 대비 탄소 배출량 변화' if delta else '탄소 배출량'
 
         ax: Axes
-        for ax, p in zip(axes.ravel(), ('전체', *purpose), strict=True):
-            a = p == '전체'
-            d = data if a else data.filter(pl.col('purpose') == p)
+        for idx, (ax, p) in enumerate(zip(axes.ravel(), purpose, strict=False)):
+            d = data if (p == '전체') else data.filter(pl.col('purpose') == p)
             sns.barplot(
                 d.to_pandas(),
                 x='value',
                 y='grade.kor',
                 hue='scope' if existing else None,
                 ax=ax,
-                legend=a,
+                legend=idx == 0,
                 linewidth=0,
                 capsize=0.25,
                 err_kws={'linewidth': 1},
             )
             ax.set_xlabel(f'{xlabel} [kg/m²yr]')
             ax.set_ylabel('')
+            ax.set_title(f'{p}{f" ({owner})" if owner else ""}')
+
+            if legend := ax.get_legend():
+                legend.set_title('')
+
+        path = self.output / (
+            f'{self.PREFIX}-{elec}-{owner or "전체"}'
+            f'-{"Base편차" if delta else "배출량"}'
+            f'{self._suffix}.svg'
+        )
+        fig.savefig(path)
+        fig.savefig(path.with_suffix('.png'))
+
+    def __call__(self):
+        for e, v, o in itertools.product(
+            ('기존', '전환'),
+            ('value', 'delta'),
+            ('공공', '민간', None),
+        ):
+            self.plot(e, v, o)
+
+        for g in (('owner', 'purpose'), ('owner',), ('purpose',)):
+            (
+                self.data
+                .rename({'emission/gfa': 'E/A', 'emission.delta': 'dE/A'})
+                .group_by('electrification', *g, 'grade', 'scope')
+                .agg(*_describe('E/A'), *_describe('dE/A'))
+                .sort(pl.all())
+                .with_columns(
+                    pl.lit(None).alias(
+                        'E/A=연면적당 배출량 [kg/m²], '
+                        'dE/A=Baseline 대비 연면적당 배출량 변화 [kg/m²]'
+                    )
+                )
+                .write_csv(
+                    self.output / f'{self.PREFIX}-stat-{"-".join(g)}{self._suffix}.csv',
+                    include_bom=True,
+                )
+            )
+
+
+@app.command
+@dataclass
+class Reduction(_Command):
+    """기존, 베이스 대비 등급별 감축량."""
+
+    PREFIX: ClassVar[str] = '02.감축량'
+    EXCLUDE_GRADE: ClassVar[tuple[Grade, ...]] = (Grade.NOPV,)
+
+    @functools.cached_property
+    def data(self):
+        grade = pl.col('grade')
+        emission = pl.col('emission/gfa')
+
+        data = (
+            self.emission
+            .group_by([*INDEX.CASE, 'grade.kor'])  # scope 미구분
+            .agg(emission.sum())
+            .with_columns(
+                emission
+                .filter(grade == Grade.EXST)
+                .sum()
+                .over(INDEX.BUILDING)
+                .alias(Grade.EXST),
+                emission
+                .filter(grade == Grade.BASE)
+                .sum()
+                .over(INDEX.BUILDING)
+                .alias(Grade.BASE),
+            )
+            .unpivot(
+                [Grade.EXST, Grade.BASE],
+                index=[*INDEX.CASE, 'grade.kor', emission],
+                variable_name='reference.grade',
+                value_name='reference.value',
+            )
+            .collect()
+        )
+
+        assert (
+            data
+            .filter(grade == pl.col('reference.grade'))
+            .select((emission - pl.col('reference.value')).eq(0).all())
+            .item()
+        )
+
+        return (
+            data
+            .filter(grade.is_in([Grade.EXST, Grade.BASE]).not_())
+            .with_columns(
+                (pl.col('reference.value') - emission).alias('reduction'),
+                pl.col('reference.grade').replace_strict({
+                    Grade.EXST: '기존건물 대비',
+                    Grade.BASE: 'Base 대비',
+                }),
+            )
+            .sort(pl.all())
+        )
+
+    def plot(self, elec: Electrification):
+        data = self.data.filter(pl.col('electrification') == elec)
+
+        with plt.rc_context({'xtick.top': False, 'xtick.bottom': False}):
+            fig = Figure(figsize=(*self.figsize, 'cm'))
+            axes = fig.subplots(2, 2, sharey=True)
+
+        purpose = data['purpose'].unique().sort().to_list()
+        path_effects = [
+            patheffects.Stroke(linewidth=2, foreground='w'),
+            patheffects.Normal(),
+        ]
+
+        ax: Axes
+        for idx, (ax, p) in enumerate(zip(axes.ravel(), purpose, strict=False)):
+            sns.barplot(
+                data.filter(pl.col('purpose') == p).to_dict(),
+                x='grade.kor',
+                y='reduction',
+                hue='reference.grade',
+                ax=ax,
+                legend=idx == 0,
+                linewidth=0,
+                capsize=0.1,
+                err_kws={'linewidth': 1},
+            )
+
+            for container in ax.containers:
+                ax.bar_label(
+                    container,
+                    fmt='%.1f',
+                    fontsize='small',
+                    padding=2,
+                    path_effects=path_effects,
+                )
+
+            ax.set_xlabel('')
+            ax.set_ylabel('탄소 저감량 [kg/m²yr]')
             ax.set_title(p)
 
             if legend := ax.get_legend():
                 legend.set_title('')
 
-        name = (
-            f'{self.PREFIX}-{elec}-{"Base편차" if delta else "배출량"}'
-            f'{self._suffix}.svg'
-        )
-        fig.savefig(self.output / name)
+        path = self.output / (f'{self.PREFIX}-{elec}{self._suffix}.svg')
+        fig.savefig(path)
+        fig.savefig(path.with_suffix('.png'))
 
     def __call__(self):
-        for e, v in itertools.product(('기존', '전환'), ('value', 'delta')):
-            self.plot(e, v)
-
-        (
-            self.data
-            .group_by('electrification', 'purpose', 'grade', 'scope')
-            .agg(_describe())
-            .sort(pl.all())
-            .write_csv(
-                self.output / f'{self.PREFIX}-stat{self._suffix}.csv', include_bom=True
-            )
-        )
+        self.data.write_csv(self.output / f'{self.PREFIX}-raw.csv', include_bom=True)
+        self.plot('기존')
+        self.plot('전환')
 
 
 @app.command
@@ -331,13 +481,7 @@ class ByGrade(_Command):
 class Convert(_Command):
     """전전화 전환 비교."""
 
-    figsize: tuple[float, float] = (25, 9.5)
-
     PREFIX: ClassVar[str] = '03.전전화전환'
-
-    def __post_init__(self):
-        super().__post_init__()
-        self._data = functools.cache(self.__data)
 
     @functools.cached_property
     def grade_colors(self):
@@ -345,37 +489,54 @@ class Convert(_Command):
         colors = Colormap('cmocean:rain')(np.linspace(0.9, 0.1, len(grades)))
         return dict(zip(grades, colors, strict=True))
 
-    def __data(self, scope: SCOPE):
-        if scope == '직간접':
-            data = self.emission
-        else:
-            data = self.emission.filter(pl.col('scope') == scope)
-
-        index = ['bldg', 'region', 'grade', 'grade.kor']
+    @functools.cached_property
+    def data(self):
+        data = pl.concat([
+            self.emission.with_columns(pl.lit('직간접').alias('scope')),
+            self.emission.with_columns(pl.col('scope').cast(pl.String)),
+        ])
+        index = ['bldg', 'region', 'scope', 'grade', 'grade.kor']
 
         return (
             data
-            .group_by('electrification', *index)
-            .agg(pl.sum('emission/gfa'))
+            .unpivot(
+                ['delivered/gfa', 'emission/gfa'],
+                index=['electrification', *index],
+            )
+            .group_by('electrification', 'variable', *index)
+            .agg(pl.sum('value'))
             .pivot(
-                'electrification', ['기존', '전환'], index=index, values='emission/gfa'
+                'electrification',
+                ['기존', '전환'],
+                index=[*index, 'variable'],
+                values='value',
             )
             .drop_nulls('전환')
             .with_columns(
                 pl.mean_horizontal('기존', '전환').alias('mean'),
                 (pl.col('전환') - pl.col('기존')).alias('diff'),
             )
+            .sort(pl.all())
             .collect()
         )
 
     def plot(
         self,
+        variable: Literal['소요량', '배출량'],
         scope: SCOPE,
         *,
         base_only: bool = False,
         bland_altman: bool = False,
     ):
-        data = self._data(scope).sort('grade')
+        data = (
+            self.data
+            .filter(pl.col('scope') == scope)
+            .filter(
+                pl.col('variable')
+                == ('delivered/gfa' if variable == '소요량' else 'emission/gfa')
+            )
+            .sort('grade')
+        )
 
         if base_only:
             data = data.filter(pl.col('grade') == Grade.BASE)
@@ -393,13 +554,14 @@ class Convert(_Command):
             alpha=0.8,
         )
 
+        unit = 'kWh/m²yr' if variable == '소요량' else 'kg/m²yr'
         if bland_altman:
-            ax.set_xlabel('전환 전후 평균 배출량 [kg/m²yr]')
-            ax.set_ylabel('전환 시 배출량 변화 [kg/m²yr]')
+            ax.set_xlabel(f'전환 전후 평균 {variable} [{unit}]')
+            ax.set_ylabel(f'전환 시 {variable} 변화 [{unit}]')
             ax.axhline(y=0, c='k', lw=0.8, alpha=0.8, zorder=0)
         else:
-            ax.set_xlabel('전환 전 배출량 [kg/m²yr]')
-            ax.set_ylabel('전환 후 배출량 [kg/m²yr]')
+            ax.set_xlabel(f'전환 전 {variable} [{unit}]')
+            ax.set_ylabel(f'전환 후 {variable} [{unit}]')
             utils.mpl.equal_scale(ax)
 
         if not base_only:
@@ -407,47 +569,52 @@ class Convert(_Command):
 
         kind = 'BlandAltman' if bland_altman else 'Identity'
         b = 'Base' if base_only else 'Grades'
-        fig.savefig(self.output / f'{self.PREFIX}-{scope}-{kind}-{b}{self._suffix}.svg')
+        path = (
+            self.output
+            / f'{self.PREFIX}-{variable}-{scope}-{kind}-{b}{self._suffix}.svg'
+        )
+        fig.savefig(path)
+        fig.savefig(path.with_suffix('.png'))
 
     def __call__(self):
-        (
-            self.emission
-            .group_by('electrification', 'scope', 'bldg', 'region', 'grade')
-            .agg(pl.sum('emission/gfa'))
-            .pivot(
-                'electrification',
-                ['기존', '전환'],
-                index=['scope', 'bldg', 'region', 'grade'],
-                values='emission/gfa',
-            )
-            .drop_nulls('전환')
-            .with_columns(
-                pl.mean_horizontal('기존', '전환').alias('mean'),
-                (pl.col('전환') - pl.col('기존')).alias('diff'),
-            )
-            .sort(pl.all())
-            .collect()
-            .write_csv(self.output / f'{self.PREFIX}-raw.csv', include_bom=True)
-        )
+        self.data.write_csv(self.output / f'{self.PREFIX}-raw.csv', include_bom=True)
 
-        for scope, o, a in itertools.product(
+        for variable, scope, o, a in itertools.product(
+            ('소요량', '배출량'),
             ('간접', '직간접'),
             (False, True),
             (False, True),
         ):
-            self.plot(scope, base_only=o, bland_altman=a)
+            self.plot(variable, scope, base_only=o, bland_altman=a)
+
+
+@app.command
+def move_png(paths: Paths):
+    src = paths.eco2.report
+    dst = src / 'png'
+    dst.mkdir(exist_ok=True)
+
+    for p in src.glob('**/*.png'):
+        if p.is_relative_to(dst):
+            continue
+
+        shutil.move(p, dst / p.name)
 
 
 @app.command
 def run(paths: Paths):
+    paths.eco2.report.mkdir(exist_ok=True)
+
     for outlier in (False, True):
         Baseline(paths, outlier=outlier)()
         ByGrade(paths, outlier=outlier)()
+        Reduction(paths, outlier=outlier)()
         Convert(paths, outlier=outlier)()
+
+    move_png(paths)
 
 
 if __name__ == '__main__':
-    plt.style.use('custom.mplstyle')
     # paul tol light
     sns.set_palette([
         '#44BB99',
