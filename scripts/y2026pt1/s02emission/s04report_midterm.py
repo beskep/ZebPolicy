@@ -96,21 +96,17 @@ class _Command:
     def __post_init__(self):
         logger.info(self.__class__.__name__, outlier=self.outlier)
 
-    @property
+        self._reference_filter = pl.col('reference') == 'ECO2'
+
     def _raw(self):
-        return (
-            pl
-            .scan_parquet(self.paths.eco2.root / '02.emission.parquet')
-            .filter(pl.col('reference') == 'ECO2')
-            .with_columns()
-        )
+        return pl.scan_parquet(self.paths.eco2.root / '02.emission.parquet')
 
     @property
     def emission(self):
-        if self.outlier:
-            raw = self._raw
-        else:
-            raw = self._raw.filter(pl.col('bldg').is_in(self.OUTLIERS).not_())
+        raw = self._raw().filter(self._reference_filter)
+
+        if not self.outlier:
+            raw = raw.filter(pl.col('bldg').is_in(self.OUTLIERS).not_())
 
         grade = {
             Grade.EXST: '기존',
@@ -160,7 +156,7 @@ class _Command:
             )
         )
 
-    @property
+    @functools.cached_property
     def output(self):
         d = (
             self.paths.eco2.report / self.PREFIX
@@ -170,7 +166,7 @@ class _Command:
         d.mkdir(exist_ok=True)
         return d
 
-    @property
+    @functools.cached_property
     def _suffix(self):
         return '' if self.outlier else ' NoOutlier'
 
@@ -495,7 +491,36 @@ class Reduction(_Command):
 class Convert(_Command):
     """전전화 전환 비교."""
 
+    figsize: tuple[float, float] = (13, 9.5)
+
+    modified_reference: bool = False
+
     PREFIX: ClassVar[str] = '03.전전화전환'
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        if not self.modified_reference:
+            return
+
+        elec = pl.col('electrification')
+        ref = pl.col('reference')
+
+        self._reference_filter = (
+            (elec.eq('기존') & ref.eq('ECO2'))  # fmt
+            | (elec.eq('전환') & ref.eq('ECO2Modified'))
+        )
+
+    @functools.cached_property
+    def output(self):
+        prefix = self.PREFIX
+        if self.modified_reference:
+            prefix = f'{prefix}-배출계수수정'
+
+        d = self.paths.eco2.report / prefix
+        d.mkdir(exist_ok=True)
+
+        return d
 
     @functools.cached_property
     def grade_colors(self):
@@ -572,7 +597,7 @@ class Convert(_Command):
         if bland_altman:
             ax.set_xlabel(f'전환 전후 평균 {variable} [{unit}]')
             ax.set_ylabel(f'전환 시 {variable} 변화 [{unit}]')
-            ax.axhline(y=0, c='k', lw=0.8, alpha=0.8, zorder=0)
+            ax.axhline(y=0, c='k', lw=1, alpha=0.9, zorder=0)
         else:
             ax.set_xlabel(f'전환 전 {variable} [{unit}]')
             ax.set_ylabel(f'전환 후 {variable} [{unit}]')
@@ -593,13 +618,11 @@ class Convert(_Command):
     def __call__(self):
         self.data.write_csv(self.output / f'{self.PREFIX}-raw.csv', include_bom=True)
 
-        for variable, scope, o, a in itertools.product(
+        for variable, base_only in itertools.product(
             ('소요량', '배출량'),
-            ('간접', '직간접'),
-            (False, True),
             (False, True),
         ):
-            self.plot(variable, scope, base_only=o, bland_altman=a)
+            self.plot(variable, '직간접', base_only=base_only, bland_altman=True)
 
 
 @app.command
@@ -623,7 +646,8 @@ def run(paths: Paths):
         Baseline(paths, outlier=outlier)()
         ByGrade(paths, outlier=outlier)()
         Reduction(paths, outlier=outlier)()
-        Convert(paths, outlier=outlier)()
+        Convert(paths, outlier=outlier, modified_reference=False)()
+        Convert(paths, outlier=outlier, modified_reference=True)()
 
     move_png(paths)
 
@@ -636,11 +660,17 @@ class ConvertExample(_Command):
     region: Region = '중부2'
 
     def __call__(self):
-        data = self._raw.filter(
-            pl.col('bldg') == self.bldg,
-            pl.col('grade') == self.grade,
-            pl.col('region') == self.region,
-        ).collect()
+        data = (
+            self
+            ._raw()
+            .filter(
+                pl.col('reference') == 'ECO2',
+                pl.col('bldg') == self.bldg,
+                pl.col('grade') == self.grade,
+                pl.col('region') == self.region,
+            )
+            .collect()
+        )
         data.write_csv(self.output / 'convert-example.csv', include_bom=True)
         return data
 
