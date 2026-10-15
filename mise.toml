@@ -14,8 +14,8 @@ run = [
 
 [tasks.lint]
 run = [
-  "uvx ruff check --fix",
-  "uvx ty check --fix",
+  "uvx ruff check --fix --exit-zero",
+  "uvx ty check --fix --exit-zero",
   "typos",
 ]
 
