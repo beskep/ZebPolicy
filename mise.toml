@@ -5,10 +5,6 @@ tombi = "latest"
 typos = "latest"
 
 [tasks]
-"lint:ruff"  = "uvx ruff check --fix"
-"lint:ty"    = "uvx ty check --fix"
-"lint:typos" = "typos"
-
 [tasks.format]
 run = [
   "uvx ruff format",
@@ -17,7 +13,14 @@ run = [
 ]
 
 [tasks.lint]
-depends = ["lint:*"]
+run = [
+  "uvx ruff check --fix",
+  "uvx ty check --fix",
+  "typos",
+]
 
 [tasks.check]
-run = [{ task = "format" }, { task = "lint" }]
+run = [
+  { task = "format" },
+  { task = "lint" },
+]
