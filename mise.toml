@@ -1,8 +1,9 @@
 [tools]
-oxfmt = "latest"
-prek  = "latest"
-tombi = "latest"
-typos = "latest"
+oxfmt    = "latest"
+prek     = "latest"
+tombi    = "latest"
+typos    = "latest"
+typstyle = "latest"
 
 [tasks]
 [tasks.format]
@@ -10,6 +11,7 @@ run = [
   "uvx ruff format",
   "tombi format",
   "oxfmt",
+  "typstyle --inplace --line-width 120 --wrap-text=sentence .",
 ]
 
 [tasks.lint]
