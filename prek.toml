@@ -11,36 +11,8 @@ hooks = [
 repo = "local"
 
 [[repos.hooks]]
-id       = "ruff-check"
-name     = "ruff check"
-entry    = "uvx ruff check --fix"
-language = "system"
-types_or = ["python", "pyi", "jupyter"]
-
-[[repos.hooks]]
-id       = "ruff-format"
-name     = "ruff format"
-entry    = "uvx ruff format"
-language = "system"
-types_or = ["python", "pyi", "jupyter"]
-
-[[repos.hooks]]
-id       = "biome-format"
-name     = "biome format"
-entry    = "mise x -- biome format --write"
-language = "system"
-types_or = ["json"]
-
-[[repos.hooks]]
-id       = "tombi-format"
-name     = "tombi format"
-entry    = "mise x -- tombi format"
-language = "system"
-files    = '\.toml$'
-
-[[repos.hooks]]
-id       = "typstyle"
-name     = "typstyle"
-entry    = "mise x -- typstyle --inplace --line-width 120"
-language = "system"
-files    = '\.typ$'
+id             = "mise-format"
+name           = "mise format"
+entry          = "mise run format"
+language       = "system"
+pass_filenames = false
