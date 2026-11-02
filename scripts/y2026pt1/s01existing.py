@@ -11,7 +11,7 @@ import polars.selectors as cs
 import seaborn as sns
 
 from zeb import utils
-from zeb.utils.cli import App
+from zeb.cli import App
 from zeb.y2026.config import Paths  # ruff:ignore[typing-only-first-party-import]
 
 app = App(
@@ -150,7 +150,6 @@ class Eda:
     def __call__(self):
         self.describe()
 
-        utils.mpl.MplTheme().grid().apply()
         self.plot('heating')
         self.plot('cooling')
 

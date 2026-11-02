@@ -12,7 +12,7 @@ from tqdm.rich import tqdm
 import zeb.emission
 import zeb.y2026.common as comm
 from zeb import utils
-from zeb.utils.cli import App
+from zeb.cli import App
 from zeb.y2026.common import INDEX, Grade
 from zeb.y2026.config import Paths  # ruff:ignore[typing-only-first-party-import]
 

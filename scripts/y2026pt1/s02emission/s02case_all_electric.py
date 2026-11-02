@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import cyclopts
 import structlog
 
-from zeb.utils.cli import App
+from zeb.cli import App
 from zeb.y2026 import editor
 
 app = App(

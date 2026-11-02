@@ -17,7 +17,7 @@ from matplotlib import patheffects
 from matplotlib.figure import Figure
 
 from zeb import utils
-from zeb.utils.cli import App
+from zeb.cli import App
 from zeb.y2026.common import (
     INDEX,
     PURPOSE,

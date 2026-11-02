@@ -16,7 +16,7 @@ from cmap import Colormap
 from matplotlib.figure import Figure
 
 from zeb import utils
-from zeb.utils.cli import App
+from zeb.cli import App
 from zeb.y2026.config import Paths  # ruff: ignore[typing-only-first-party-import]
 
 if TYPE_CHECKING:
