@@ -1,0 +1,5 @@
+tick.dir:         in
+font.monospace:   Iosevka Custom, Iosevka, monospace
+font.sans-serif:  Noto Sans KR, Source Han Sans KR, sans-serif
+font.serif:       Noto Sans Serif, Source Han Serif KR, serif
+mathtext.fontset: cm
