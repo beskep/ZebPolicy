@@ -5,6 +5,9 @@ tombi    = "latest"
 typos    = "latest"
 typstyle = "latest"
 
+[env]
+PYTHONWARNINGS = "ignore:Setting rc['figure.constrained_layout.use'] to False"
+
 [tasks]
 [tasks.format]
 run = [
