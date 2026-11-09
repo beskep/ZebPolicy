@@ -172,9 +172,9 @@ class Parse(_Command):
 class Prep(_Command):
     """데이터 전처리 - 날짜 해석 및 변수 추출."""
 
-    # XXX: 민간/공공 구분 불가, 전용면적 불명
+    # FIXME: 민간/공공 구분 불가, 전용면적 불명
 
-    years: tuple[int, int] = (2021, 2025)
+    years: tuple[int, int] = (2016, 2025)
 
     def read(self):
         src = mi.one(self.paths.data.glob('00.*.parquet'))
@@ -294,7 +294,7 @@ class EDA(_Command):
             data = data.filter(pl.col('value') != 0)
 
         grid = sns.FacetGrid(
-            data,
+            data.to_pandas(),
             col='use',
             col_wrap=3,
             col_order=['교육사회용', '상업용', '기타', '단독주택', '공동주택'],
@@ -414,6 +414,71 @@ def use():
         .with_columns(pl.col('use.raw').list.join(', '))
         .to_dicts()
     )
+
+
+@app.command
+@dataclass
+class Area(_Command):
+    """유형별 연간 신규 연면적 통계."""
+
+    correct_scale: bool = True
+    """A0, C0를 A1, C1로 변환"""
+
+    @functools.cached_property
+    def data(self):
+        lf = (
+            pl
+            .scan_parquet(self.paths.data / '01.data.parquet')
+            .drop_nulls('date')
+            .with_columns(pl.col('date').dt.year().alias('year'))
+        )
+
+        if self.correct_scale:
+            lf = lf.with_columns(
+                pl.col('scale.a').cast(pl.String).replace('A0', 'A1'),
+                pl.col('scale.c').cast(pl.String).replace('C0', 'C1'),
+            )
+
+        return (
+            lf
+            .with_columns(
+                pl
+                .when(pl.col('use').is_in(['공동주택', '단독주택']))
+                .then(pl.col('scale.c'))
+                .otherwise(pl.col('scale.a'))
+                .alias('scale')
+            )
+            .with_columns(pl.format('{}-{}', 'use', 'scale').alias('case'))
+            .collect()
+        )
+
+    def __call__(self):
+        raw = self.data
+
+        logger.info('use', uses=raw['use'].unique().sort().to_list())
+        logger.info(
+            'year',
+            **raw.select(
+                pl.max('year').alias('year.max'),
+                pl.min('year').alias('year.min'),
+            ).row(named=True),
+        )
+
+        area = (
+            raw
+            .group_by('case', 'year')
+            .agg(pl.sum('gfa', 'gfa.ground'))
+            .group_by('case')
+            .agg(
+                pl.col('gfa', 'gfa.ground').mean().name.suffix(':mean'),
+                pl.col('gfa', 'gfa.ground').std().name.suffix(':std'),
+            )
+            .sort(pl.all())
+        )
+
+        area.write_csv(self.paths.root / 'area.csv', include_bom=True)
+
+        return area
 
 
 if __name__ == '__main__':
