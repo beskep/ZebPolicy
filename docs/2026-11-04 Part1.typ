@@ -833,7 +833,7 @@ $ <eq:share5-cancel>
   "5대 용도 배출량 대비 변화율"을 제시하려면 $Delta C \/ (r_"5use" (s) dot C_"REF")$로 계산한다.
 + *실사용 보정계수 $k_"use"$.*
   ECO2 평가값과 실제 사용량의 차이를 보정할 때, 실제 사용량 중 5대 용도분을 분리해야 한다.
-  $ k_"use" (s) = (r_"5use" (s) dot e_"obs" (s)) / e_"ECO2" (s) $ <eq:kappa>
+  $ k_"use" (s) = (r_"5use" (s) dot e_"obs" (s)) / (e_"ECO2" (s)) $ <eq:kappa>
   $e_"obs" (s)$는 최근 준공 건물의 실측 원단위(건물 에너지 사용량 자료), $e_"ECO2" (s)$는 같은 건물군의 ECO2 평가 원단위이다.
 
 *자료원.*
@@ -910,12 +910,12 @@ A안의 2050년 전력 간접 감축량은 B안보다 약 2.7배($approx 1 \/ 0.
 국가 전력 배출계수는 과거 실적에 대해서만 공표되므로 2025년 이후 값은 전망이 필요하다.
 본 방법은 KEEI REF의 발전·열생산 부문 배출원단위 변화율을 이용해 전망한다.
 
-$ "EF" (t, "el") = "EF"_"국가" (t_0, "el") dot I_"PH" (t) / I_"PH" (t_0) $ <eq:ef-b>
+$ "EF" (t, "el") = "EF"_"국가" (t_0, "el") dot (I_"PH" (t)) / (I_"PH" (t_0)) $ <eq:ef-b>
 
 $t_0$는 국가 계수가 공표된 최근 연도(또는 2024년)이다.
 $I_"PH" (t)$는 KEEI REF 전망에서 *발전·열생산 부문이 공급한 에너지 1 MWh당 배출량*이다.
 
-$ I_"PH" (t) = C_"PH" (t) / (Q_"el,gen" (t) + 11.63 dot Q_"ht,gen" (t)) quad ["tCO"_2"/MWh"] $ <eq:intensity>
+$ I_"PH" (t) = (C_"PH" (t)) / (Q_"el,gen" (t) + 11.63 dot Q_"ht,gen" (t)) quad ["tCO"_2"/MWh"] $ <eq:intensity>
 
 - $C_"PH" (t)$: 발전·열생산 부문 배출량(MtCO#sub[2]eq, `A1.14` '발전/열생산')
 - $Q_"el,gen" (t)$: 총발전량(TWh, `A1.11`)
@@ -964,7 +964,7 @@ KEEI 지역난방 투입 연료는 2050년에도 대부분 가스(`A1.12`)라, �
 
 신축 비중은 연도 $t$의 부문 재고 연면적 중 *2025년 이후 준공된* 유형 $b$ 건물이 차지하는 비중이다.
 
-$ r_"new" (t, b) = (sum_(t_c = 2025)^(t) A_"new" (t_c, b)) / A_"stock" (t, s) $ <eq:theta>
+$ r_"new" (t, b) = (sum_(t_c = 2025)^(t) A_"new" (t_c, b)) / (A_"stock" (t, s)) $ <eq:theta>
 
 - $t_c$: 준공(사용승인)연도.
   분자는 2025년부터 $t$년까지 매년 준공된 유형 $b$ 신축 연면적의 누적합이다.
@@ -997,7 +997,7 @@ $ <eq:new-avg>
   *정합성 점검.*
   신축 물량을 KEEI와 무관하게 고정하면, KEEI 재고 전망과 함께 쓸 때 묵시적 멸실률이 정해진다.
   $
-    r^"impl"_"demo" (t, s) = (sum_(b in cal(B)_"new" (s)) A_"new" (b) - [A_"stock" (t, s) - A_"stock" (t - 1, s)]) / A_"stock" (t - 1, s)
+    r^"impl"_"demo" (t, s) = (sum_(b in cal(B)_"new" (s)) A_"new" (b) - [A_"stock" (t, s) - A_"stock" (t - 1, s)]) / (A_"stock" (t - 1, s))
   $ <eq:implied-delta>
   KEEI 주거 재고는 2040년 이후 감소하므로, 그 기간에는 묵시적 멸실률이 커진다.
   $r^"impl"_"demo"$이 과거 멸실 실적에 비해 지나치게 크거나 음수이면, 평균 물량과 KEEI 전망이 서로 맞지 않는다는 뜻이다.
@@ -1091,7 +1091,7 @@ $r_"demo" (s)$는 연간 멸실률(전년 재고 중 당해 멸실 면적의 비
 신축 기준건물($"base"$)과 재고 평균 건물의 단위면적당 사용량이 다르므로 이를 보정한다.
 
 $
-  k_"new" (t, b, f) = e_"base" (b, f) / e_"stock" (t, s, f), quad e_"stock" (t, s, f) = Q(t, s, f) / A_"stock" (t, s)
+  k_"new" (t, b, f) = (e_"base" (b, f)) / (e_"stock" (t, s, f)), quad e_"stock" (t, s, f) = (Q(t, s, f)) / (A_"stock" (t, s))
 $ <eq:mu>
 
 - $e_"base" (b, f)$: 시뮬레이션에서 구한 유형 $b$ 기준건물의 에너지원 $f$ 사용량(kWh/m#super[2]).
@@ -1122,7 +1122,7 @@ $ <eq:mu>
 사용량이 줄면 음수이다.
 
 $
-  R_"grade" (b, g, f) = e_"grade" (b, g, f) / e_"base" (b, f) - 1, wide R_"PV" (b, g) = - (e_"PV" (b, g) - e_"PV" (b, "base")) / e_"base" (b, "el")
+  R_"grade" (b, g, f) = (e_"grade" (b, g, f)) / (e_"base" (b, f)) - 1, wide R_"PV" (b, g) = - (e_"PV" (b, g) - e_"PV" (b, "base")) / (e_"base" (b, "el"))
 $ <eq:rate>
 
 여기서 $e_"PV"$는 단위면적당 태양광 발전량(kWh/m#super[2])이다.
@@ -1165,7 +1165,7 @@ $
   dot (1 + R_"deg")^(t - t_c)
   dot sum_g r^p_"grade" (t_c, b, g)
   dot R_"grade" (b, g, f) \
-  r_"cohort" (t_c, t) = A_"new" (t_c, s) / (sum_(t'_c = 2025)^(t) A_"new" (t'_c, s))
+  r_"cohort" (t_c, t) = (A_"new" (t_c, s)) / (sum_(t'_c = 2025)^(t) A_"new" (t'_c, s))
 $ <eq:avg-rate>
 
 $r_"cohort" (t_c, t)$는 연도 $t$까지 누적된 신축 면적 중 $t_c$년 준공분의 비중이다.
@@ -1190,7 +1190,7 @@ $R_"deg"$는 연간 성능 저하율로, 효과가 줄어드는 것이므로 음
 전환 비중은 연도 $t$의 부문 재고 연면적 중 2025년 이후 전전화된 유형 $b$ 기존 건물의 비중이다.
 
 $
-  r^p_"conv" (t, b) = (sum_(t_x = 2025)^(t) A^p_"conv" (t_x, b) dot (1 - r_"demo" (s))^(t - t_x)) / A_"stock" (t, s)
+  r^p_"conv" (t, b) = (sum_(t_x = 2025)^(t) A^p_"conv" (t_x, b) dot (1 - r_"demo" (s))^(t - t_x)) / (A_"stock" (t, s))
 $ <eq:eta>
 
 $ A^p_"conv" (t_x, b) = r^p_"conv/yr" (t_x, b) dot A_"elig" (t_x - 1, b) $ <eq:conv-area>
@@ -1214,11 +1214,11 @@ $ A^p_"conv" (t_x, b) = r^p_"conv/yr" (t_x, b) dot A_"elig" (t_x - 1, b) $ <eq:c
 시뮬레이션으로 구한 전환 전후 사용량을 이용해, 에너지원별 사용량 변화를 KEEI 재고 평균 원단위로 나눈다.
 
 $
-  R^*_"conv" (t, b, f) = (e_"post" (b, f) - e_"pre" (b, f)) / e_"stock" (t, s, f) = k_"conv" (t, b, f) dot R_"conv" (b, f)
+  R^*_"conv" (t, b, f) = (e_"post" (b, f) - e_"pre" (b, f)) / (e_"stock" (t, s, f)) = k_"conv" (t, b, f) dot R_"conv" (b, f)
 $ <eq:lambda>
 
 $
-  k_"conv" (t, b, f) = e_"pre" (b, f) / e_"stock" (t, s, f), quad R_"conv" (b, f) = e_"post" (b, f) / e_"pre" (b, f) - 1
+  k_"conv" (t, b, f) = (e_"pre" (b, f)) / (e_"stock" (t, s, f)), quad R_"conv" (b, f) = (e_"post" (b, f)) / (e_"pre" (b, f)) - 1
 $ <eq:lambda-decomp>
 
 - $e_"pre" (b, f)$: 유형 $b$ 대표 건물의 전환 전 에너지원 $f$ 사용량(kWh/m#super[2]).
@@ -1272,7 +1272,7 @@ $ <eq:conv-net>
 순 변화량이 음수(순 감축)가 될 조건은 다음과 같다.
 
 $
-  (e_"post" ("el") - e_"pre" ("el")) / (e_"pre" ("LNG") - e_"post" ("LNG")) < "EF" ("LNG") / "EF" (t, "el")
+  (e_"post" ("el") - e_"pre" ("el")) / (e_"pre" ("LNG") - e_"post" ("LNG")) < ("EF" ("LNG")) / ("EF" (t, "el"))
 $ <eq:conv-breakeven>
 
 좌변은 "줄어든 LNG 1 kWh를 대체하는 데 필요한 전력량"이다.
