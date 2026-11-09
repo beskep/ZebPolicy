@@ -12,29 +12,29 @@ class EmissionFactor:
     unit: str
 
 
-RawType = dict[str, dict[str, EmissionFactor]]
+_RawType = dict[str, dict[str, EmissionFactor]]
 
 
 @dc.dataclass(frozen=True)
 class EmissionFactors:
-    raw: RawType  # {ref: {source: coefficient}}
+    raw: _RawType  # {ref: {source: coefficient}}
     unit: str = 'kg/kWh'
 
     @classmethod
-    def read(cls, path: str | Path | None = None):
+    def read(cls, path: str | Path | None = None, unit: str = 'kg/kWh'):
         p = (
             Path(__file__).parent / 'emission-factor.toml'
             if path is None
             else Path(path)
         )
-        raw = msgspec.toml.decode(p.read_text('utf-8'), type=RawType)
-        return cls(raw)
+        raw = msgspec.toml.decode(p.read_text('utf-8'), type=_RawType)
+        return cls(raw, unit=unit)
 
     @functools.cached_property
     def conversion(self):
         """단위환산계수."""
         ur = pint.UnitRegistry[float]()
-        ur.define('tonCO2 = 1000 kg')  # NOTE *NO SHORT TON*
+        ur.define('tonCO2 = tonne')  # NOTE: Metric ton, *NOT SHORT TON*
         ur.define('kgCO2 = kg')
         ur.define('tonC = (44/12) tonCO2')
 
@@ -81,6 +81,7 @@ if __name__ == '__main__':
     console = rich.get_console()
 
     factors = EmissionFactors.read()
+    console.print(factors)
 
     console.print('raw')
     console.print(factors.raw)
@@ -94,5 +95,4 @@ if __name__ == '__main__':
     console.print(factors.emission_factors)
 
     console.rule()
-    pl.Config.set_tbl_rows(20)
-    console.print(factors.dataframe())
+    console.print(factors.dataframe().filter(pl.col('reference') == 'ECO2'))

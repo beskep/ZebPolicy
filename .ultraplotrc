@@ -1,10 +1,16 @@
+# ultraplot settings
 cycle:                tol:bright_alt
-font.monospace:       Iosevka Custom, Iosevka, monospace
-font.sans-serif:      Noto Sans KR, Source Han Sans KR, sans-serif
-font.serif:           Noto Sans Serif, Source Han Serif KR, serif
 legend.borderaxespad: 1
-legend.edgecolor:     gray
+legend.edgecolor:     0.6
 legend.fontsize:      small
-mathtext.fontset:     cm
 subplots.refwidth:    8cm
 tick.dir:             in
+
+# Matplotlib settings
+font.family:          sans-serif
+font.sans-serif:      Noto Sans KR, Source Han Sans KR, sans-serif
+font.serif:           Noto Sans Serif, Source Han Serif KR, serif
+font.cursive:         Apple Chancery, Textile, Zapf Chancery, Sand, Script MT, Felipa, Comic Neue, Comic Sans MS, cursive
+
+mathtext.fontset:     cm
+mathtext.default:     normal
