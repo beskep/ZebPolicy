@@ -29,7 +29,7 @@ ytick.labelcolor:    0
 ytick.direction:     in
 
 font.family:     sans-serif
-font.serif:      Noto Serif KR, Source Han Serif KR, DejaVu Serif, serif
-font.sans-serif: Noto Sans KR, Source Han Sans KR, DejaVu Sans, sans-serif
+font.serif:      Noto Serif KR, Source Han Serif KR, DejaVu Serif
+font.sans-serif: Noto Sans KR, Source Han Sans KR, DejaVu Sans
 
 mathtext.fontset: cm  # dejavusans, cm, stix, stixsans, custom
