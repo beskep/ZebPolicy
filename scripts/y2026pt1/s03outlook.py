@@ -90,7 +90,7 @@ class Interpolate:
 
     def _plot(self, data: pl.DataFrame):
         sectors = ('서비스', '가정')
-        fig, axes = uplt.subplots(nrows=1, ncols=2)
+        fig, axes = uplt.subplots(nrows=1, ncols=2, sharey='limits')
         for (sector, group), sub in data.group_by(
             'sector', 'group', maintain_order=True
         ):
@@ -100,11 +100,16 @@ class Interpolate:
                 sub['energy_demand_toe'],
                 label=group,
                 cycle=_CYCLE,
+                lw=2,
                 alpha=0.8,
             )
 
         for sector, ax in zip(sectors, axes, strict=True):
-            ax.format(title=sector, xlabel='', ylabel=f'{self.variable} [toe]')
+            ax.format(
+                title=f'연도별 {sector} 추정 에너지 수요',
+                xlabel='',
+                ylabel=f'{self.variable} [toe]',
+            )
             ax.legend()
             ax.set_ylim(0)
 
@@ -173,7 +178,7 @@ class Emission:
 
     def _plot(self, data: pl.DataFrame):
         sectors = ('비주거', '주거')
-        fig, axes = uplt.subplots(nrows=1, ncols=2)
+        fig, axes = uplt.subplots(nrows=1, ncols=2, sharey='limits')
         for (sector, source), sub in data.group_by(
             'sector', 'source', maintain_order=True
         ):
@@ -183,15 +188,20 @@ class Emission:
                 sub['emission_ton'],
                 label=source,
                 cycle=_CYCLE,
+                lw=2,
                 alpha=0.8,
             )
 
         for sector, ax in zip(sectors, axes, strict=True):
-            ax.format(title=sector, xlabel='', ylabel='추정 배출량 [$tCO_2$]')
+            ax.format(
+                title=f'연도별 {sector} 추정 배출량',
+                xlabel='',
+                ylabel=r'탄소 배출량 [$\mathrm{tCO_2}$]',
+            )
             ax.legend()
             ax.set_ylim(0)
 
-        fig.savefig(self.paths.quantity.root / '01.outlook-emission.png')
+        fig.savefig(self.paths.quantity.root / '02.outlook-emission.png')
 
     def __call__(self):
         data = self._emission()
