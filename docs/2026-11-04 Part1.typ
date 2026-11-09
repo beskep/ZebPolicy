@@ -14,7 +14,7 @@
 
   show title: set text(size: 1.6 * font-size)
 
-  set heading(numbering: "1.")
+  set heading(numbering: "1.", supplement: sym.section)
   show heading: set block(above: 1.2em, below: 0.8em)
   show heading: set text(size: font-size)
   show heading.where(level: 1): set text(size: 1.2 * font-size)
@@ -136,7 +136,8 @@ $ "전환 효과" = "기준 배출량" times "전환 비중" times "원단위 �
 
     [REF의 정책 반영],
     [REF는 시행 중·시행 확정 정책을 포함.
-      \ 서비스부문은 ZEB 의무화 확대·히트펌프 보급 기조 반영을 명시\ → 강화 시나리오는 기본 시나리오와의 *차이*로 산정],
+      \ 서비스부문은 ZEB 의무화 확대·히트펌프 보급 기조 반영을 명시
+      \ → 강화 시나리오는 기본 시나리오와의 *차이*로 산정],
     [KEEI 보고서],
     [@section:ref],
   ),
@@ -409,7 +410,8 @@ $ "전환 효과" = "기준 배출량" times "전환 비중" times "원단위 �
     align: (center, left, left),
     table.header([단계], [내용], [자료]),
     [1],
-    [KEEI 원자료를 연도별로 보간(PCHIP):\ 에너지원별 수요, 주택 수·면적, 서비스 산출액, 발전·열생산 배출·발전량],
+    [KEEI 원자료를 연도별로 보간(PCHIP):
+      \ 에너지원별 수요, 주택 수·면적, 서비스 산출액, 발전·열생산 배출·발전량],
     [`A1.6`, `A1.7`, `A1.11`, `A1.12`, `A1.14`],
 
     [2], [에너지원 대응(석유 → LPG·등유 분할) 및 단위 환산], [@table:map, 에너지수급통계],
@@ -428,12 +430,14 @@ $ "전환 효과" = "기준 배출량" times "전환 비중" times "원단위 �
     [6], [유형·등급·에너지원별 변화율 $R_"grade" (b, g, f)$ 표 작성], [시뮬레이션],
     [7], [시나리오별 등급 분포 $r^p_"grade" (t_c, b, g)$ 표 작성 → $R^p_"avg" (t, b, f)$ 계산], [시나리오 표],
     [8],
-    [전전화 대상 재고 $A_"elig" (2024, b)$ 산정, 전환율 $r^p_"conv/yr" (t_x, b)$ 설정\ → 전환 비중 $r^p_"conv" (t, b)$ 계산],
+    [전전화 대상 재고 $A_"elig" (2024, b)$ 산정, 전환율 $r^p_"conv/yr" (t_x, b)$ 설정
+      \ → 전환 비중 $r^p_"conv" (t, b)$ 계산],
     [건축물대장, 에너지 사용량 자료, 시나리오 표],
 
     [9], [유형·에너지원별 보정 전환 변화율 $R^*_"conv" (t, b, f)$ 계산], [시뮬레이션(전환 전후), KEEI],
     [10],
-    [@eq:saving-new, @eq:saving-x, @eq:pv 로 에너지원별 변화량, @eq:scope 로 범위별 합산,\ 기본 시나리오와의 차이(@eq:main-ref)로 시나리오 배출량 계산],
+    [@eq:saving-new, @eq:saving-x, @eq:pv 로 에너지원별 변화량, @eq:scope 로 범위별 합산,
+      \ 기본 시나리오와의 차이(@eq:main-ref)로 시나리오 배출량 계산],
     [—],
 
     [11], [연료 감소량 상한(@eq:conv-cap) 점검], [—],
@@ -525,8 +529,8 @@ $ "전환 효과" = "기준 배출량" times "전환 비중" times "원단위 �
     [재고, 신축, 전환 대상, 전환 연면적],
     [@section:theta, @section:elec],
 
-    [$e_"base"$, $e_"grade"$, $e_"pre"$, $e_"post"$, $e_"stock"$, $e_"PV"$],
-    [원단위(kWh/m#super[2]): 신축 기준건물, 등급별, 전환 전, 전환 후, 재고 평균, 태양광 발전량],
+    [$e_"base"$, $e_"grade"$, $e_"pre"$,\ $e_"post"$, $e_"stock"$, $e_"PV"$],
+    [원단위(kWh/m#super[2]): 신축 기준건물, 등급별, 전환 전, 전환 후,\ 재고 평균, 태양광 발전량],
     [@section:mu, @section:rate,\ @section:elec],
 
     [$r_"new"$, $r^p_"conv"$], [신축 비중, 전환 비중(재고 대비)], [@eq:theta, @eq:eta],
@@ -559,11 +563,13 @@ $ C^p (t, s, f) = C_"REF" (t, s, f) + Delta C^p (t, s, f) $ <eq:main>
 $ Delta C^p (t, s, f) = Delta C^p_"new" (t, s, f) + Delta C^p_"conv" (t, s, f) $ <eq:saving>
 
 $
-  Delta C^p_"new" (t, s, f) = C_"REF" (t, s, f) dot sum_(b in cal(B)_"new" (s)) r_"new" (t, b) dot k_"new" (t, b, f) dot R^p_"avg" (t, b, f)
+  Delta C^p_"new" (t, s, f)
+  = C_"REF" (t, s, f) dot sum_(b in cal(B)_"new" (s)) r_"new" (t, b) dot k_"new" (t, b, f) dot R^p_"avg" (t, b, f)
 $ <eq:saving-new>
 
 $
-  Delta C^p_"conv" (t, s, f) = C_"REF" (t, s, f) dot sum_(b in cal(B)_"conv" (s)) r^p_"conv" (t, b) dot R^*_"conv" (t, b, f)
+  Delta C^p_"conv" (t, s, f)
+  = C_"REF" (t, s, f) dot sum_(b in cal(B)_"conv" (s)) r^p_"conv" (t, b) dot R^*_"conv" (t, b, f)
 $ <eq:saving-x>
 
 @eq:saving-x 의 $r^p_"conv" (t, b)$는 전환 비중, $R^*_"conv" (t, b, f)$는 전환에 따른 에너지원별 보정 전환 변화율이다(@section:elec).
@@ -573,7 +579,8 @@ $ <eq:saving-x>
 신재생(태양광) 상쇄는 전력 간접 배출을 기준으로 따로 계산해 보고한다.
 
 $
-  Delta C^p_"PV" (t, s) = C_"REF" (t, s, "el") dot sum_(b in cal(B)_"new" (s)) r_"new" (t, b) dot k_"new" (t, b, "el") dot R^p_"PV" (t, b)
+  Delta C^p_"PV" (t, s)
+  = C_"REF" (t, s, "el") dot sum_(b in cal(B)_"new" (s)) r_"new" (t, b) dot k_"new" (t, b, "el") dot R^p_"PV" (t, b)
 $ <eq:pv>
 
 배출 범위별 변화량은 에너지원별 변화량의 합이다.
@@ -751,7 +758,9 @@ KEEI의 에너지원 구분과 ECO2의 에너지원 구분은 일치하지 않�
     [전기],
     [el],
     [간접],
-    [`A1.11`#footnote[KEEI 장기에너지전망 엑셀 파일(`_2025_장기에너지전망_기준시나리오REF.xlsb`)의 시트 이름.] 부문별 전력 수요(TWh)],
+    [`A1.11`
+      #footnote[KEEI 장기에너지전망 엑셀 파일(`_2025_장기에너지전망_기준시나리오REF.xlsb`)의 시트 이름.]
+      부문별 전력 수요(TWh)],
 
     [지역난방],
     [ht 또는 dhc],
@@ -777,7 +786,8 @@ ECO2 배출계수가 어느 발열량 기준으로 정의되었는지 확인하�
 $ C_"REF" (t, s, f) = Q(t, s, f) dot "EF" (f) $ <eq:cref>
 
 $Q(t, s, f)$는 부문 $s$의 에너지원 $f$ 수요(kWh)이다.
-LPG와 등유는 KEEI 석유 수요를 분할해 구한다: $Q(t, s, "LPG") = r_"oil" (s, "LPG") dot Q(t, s, "석유")$, $Q(t, s, "kero") = r_"oil" (s, "kero") dot Q(t, s, "석유")$.
+LPG와 등유는 KEEI 석유 수요를 분할해 구한다:
+$Q(t, s, "LPG") = r_"oil" (s, "LPG") dot Q(t, s, "석유")$, $Q(t, s, "kero") = r_"oil" (s, "kero") dot Q(t, s, "석유")$.
 배출계수는 A안(ECO2 고정 배출계수, @section:ef)을 쓰므로 $"EF" (f)$는 연도와 무관한 상수이다.
 B안(민감도 분석)에서만 전력 배출계수가 연도에 따라 변한다.
 
@@ -819,7 +829,8 @@ KEEI 수요는 부문 전체의 수요로, 가전·취사·업무기기·데이�
 5대 용도 비율 $r_"5use" (s)$를 기준 배출량에 곱하면, 일관성을 위해 $k_"new"$의 분모에도 곱해야 하므로 결국 약분된다.
 
 $
-  (r_"5use" (s) dot C_"REF") dot r_"new" dot e_"base" / (r_"5use" (s) dot e_"stock") dot R^p_"avg" = C_"REF" dot r_"new" dot k_"new" dot R^p_"avg"
+  (r_"5use" (s) dot C_"REF") dot r_"new" dot e_"base" / (r_"5use" (s) dot e_"stock") dot R^p_"avg"
+  = C_"REF" dot r_"new" dot k_"new" dot R^p_"avg"
 $ <eq:share5-cancel>
 
 #warning[
@@ -1068,7 +1079,7 @@ $r_"demo" (s)$는 연간 멸실률(전년 재고 중 당해 멸실 면적의 비
     ],
 
     [② 총신축률],
-    [$A_"new" (t_c, s) = r_"build" (s) dot A_"stock" (t_c - 1, s)$],
+    [$A_"new" (t_c, s) \ = r_"build" (s) A_"stock" (t_c - 1, s)$],
     [재고, 사용승인 실적],
     [
       멸실 통계 불필요.
@@ -1076,7 +1087,7 @@ $r_"demo" (s)$는 연간 멸실률(전년 재고 중 당해 멸실 면적의 비
     ],
 
     [③ 수명 분포],
-    [$r_"demo" (t, s) = sum_(n_"age") r_"age" (t, s, n_"age") dot r_"demo" (n_"age")$],
+    [$r_"demo" (t, s) \ = sum_(n_"age") r_"age" (t, s, n_"age") r_"demo" (n_"age")$],
     [건축물대장,\ 수명 함수],
     [
       노후 재고의 재건축 시기를 반영.
@@ -1327,7 +1338,8 @@ $ <eq:conv-breakeven>
   전환으로 줄어드는 연료 배출은 REF의 해당 연료 배출을 넘을 수 없다.
   연료 $f in cal(F)_D$에 대해 다음을 매년 확인한다.
   $
-    sum_(b in cal(B)_"new" (s)) r_"new" (t, b) k_"new" (t, b, f) R^p_"avg" (t, b, f) + sum_(b in cal(B)_"conv" (s)) r^p_"conv" (t, b) R^*_"conv" (t, b, f) >= -1
+    sum_(b in cal(B)_"new" (s)) r_"new" (t, b) k_"new" (t, b, f) R^p_"avg" (t, b, f)
+    + sum_(b in cal(B)_"conv" (s)) r^p_"conv" (t, b) R^*_"conv" (t, b, f) >= -1
   $ <eq:conv-cap>
   REF의 연료 수요가 줄어드는 후반기(특히 등유·LPG)에는 이 조건을 넘기 쉽다.
   넘는 경우에는 전환 대상 재고 $A_"elig" (t, b)$나 전환율 $r^p_"conv/yr" (t_x, b)$를 다시 검토한다.
@@ -1376,7 +1388,8 @@ KEEI 보고서는 REF의 정책 가정을 다음과 같이 밝히고 있다(PDF 
 - REF는 현행 정책·지침·규제뿐 아니라 *시행이 예정된 정책 수단*의 도입을 반영한다(p\. ~5).
 - REF는 2050년까지 현재 시행 중이거나 시행이 확정된 정책 기조가 유지된다는 가정의 기준선으로, IEA STEPS에 상응한다.
   선언적 목표나 확정되지 않은 기술은 제외했다(p\. ~11).
-- 서비스부문 전망에는 그린리모델링 지원 사업의 지속, *제로에너지건축물 의무화 제도 확대*, 건물 자가발전 확대, *히트펌프 보급 활성화 정책 기조*가 반영되었다(p\. ~68).
+- 서비스부문 전망에는 그린리모델링 지원 사업의 지속, *제로에너지건축물 의무화 제도 확대*,
+  건물 자가발전 확대, *히트펌프 보급 활성화 정책 기조*가 반영되었다(p\. ~68).
 - 가정부문은 '히트펌프 보급 활성화 방안'(2035년까지 350만 대)을 글상자로 소개하지만(p\. ~58), ZEB 의무화의 반영 여부는 명시하지 않았다.
 
 따라서 *REF는 현행 ZEB 로드맵(기본 시나리오)을 포함하는 것으로 본다.*
