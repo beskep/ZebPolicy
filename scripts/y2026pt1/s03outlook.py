@@ -171,7 +171,10 @@ class Emission:
                 pl
                 .col('energy_demand_toe')
                 .mul(pl.col('emission_factor'))
-                .alias('emission_ton'),
+                .alias('emission_tCO2'),
+            )
+            .with_columns(
+                pl.col('emission_tCO2').truediv(10**6).alias('emission_MtCO2')
             )
             .sort('sector', 'source', 'year')
         )
@@ -185,7 +188,7 @@ class Emission:
             ax = axes[sectors.index(sector)]
             ax.plot(
                 sub['year'],
-                sub['emission_ton'],
+                sub['emission_MtCO2'],
                 label=source,
                 cycle=_CYCLE,
                 lw=2,
@@ -196,7 +199,7 @@ class Emission:
             ax.format(
                 title=f'연도별 {sector} 추정 배출량',
                 xlabel='',
-                ylabel=r'탄소 배출량 [$\mathrm{tCO_2}$]',
+                ylabel=r'탄소 배출량 [$\mathrm{MtCO_2}$]',
             )
             ax.legend()
             ax.set_ylim(0)
@@ -206,6 +209,7 @@ class Emission:
     def __call__(self):
         data = self._emission()
         data.write_parquet(self.dst)
+        data.write_csv(self.dst.with_suffix('.csv'), include_bom=True)
 
         self._plot(data)
 
