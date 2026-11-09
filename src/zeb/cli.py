@@ -1,12 +1,12 @@
 import itertools
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, overload
 
 import attrs
 import cyclopts
 from cyclopts.core import T, _result_action_converter  # ruff:ignore[import-private-name]
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable
 
     from cyclopts._result_action import ResultAction, ResultActionSingle
 
@@ -28,6 +28,36 @@ class App(cyclopts.App):
         kw_only=True,
     )
 
+    @overload
+    def command(
+        self,
+        obj: T,
+        name: str | Iterable[str] | None = None,
+        *,
+        alias: str | Iterable[str] | None = None,
+        **kwargs: object,
+    ) -> T: ...
+
+    @overload
+    def command(
+        self,
+        obj: None = None,
+        name: str | Iterable[str] | None = None,
+        *,
+        alias: str | Iterable[str] | None = None,
+        **kwargs: object,
+    ) -> Callable[[T], T]: ...
+
+    @overload
+    def command(
+        self,
+        obj: str,
+        name: str | Iterable[str] | None = None,
+        *,
+        alias: str | Iterable[str] | None = None,
+        **kwargs: object,
+    ) -> None: ...
+
     def command(
         self,
         obj: T | str | None = None,
@@ -36,5 +66,7 @@ class App(cyclopts.App):
         alias: str | Iterable[str] | None = None,
         **kwargs: Any,
     ):
-        kwargs.setdefault('sort_key', None if _is_helper(name) else next(self._counter))
+        if not _is_helper(name):
+            kwargs.setdefault('sort_key', next(self._counter))
+
         return super().command(obj=obj, name=name, alias=alias, **kwargs)
