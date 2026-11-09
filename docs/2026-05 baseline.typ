@@ -219,5 +219,5 @@
 #{
   set text(font: "Source Sans 3", size: 16pt, weight: "regular")
   show link: it => it.body
-  bibliography("ref.bib", style: "apa")
+  bibliography("2026-05 baseline.bib", style: "apa")
 }
