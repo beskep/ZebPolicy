@@ -60,6 +60,7 @@ class _Quantity:
     raw: Path = Path('02.quantity/01.raw')
     data: Path = Path('02.quantity/02.data')
     eda: Path = Path('02.quantity/03.eda')
+    outlook: Path = Path('02.quantity/04.outlook')
 
 
 @dataclass

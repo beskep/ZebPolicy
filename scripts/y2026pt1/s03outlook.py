@@ -3,7 +3,8 @@
 보간(Interpolate) -> 세부 용도별 분리(Split) -> 탄소 배출량 추정(Emission) 순으로 실행.
 """
 
-from dataclasses import dataclass
+import warnings
+from dataclasses import KW_ONLY, dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
@@ -19,7 +20,7 @@ from zeb.emission import EmissionFactors
 from zeb.y2026.config import Paths  # ruff: ignore[typing-only-first-party-import]
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Sequence
 
 app = App(
     config=cyclopts.config.Toml(
@@ -47,9 +48,8 @@ def _read_raw(src: Path, start: int) -> pl.DataFrame:
     )
 
 
-def _pchip(data: pl.DataFrame, keys: Iterable[str]) -> pl.DataFrame:
+def _pchip(data: pl.DataFrame, keys: Sequence[str]) -> pl.DataFrame:
     """`keys`별로 절점(year, value)을 PCHIP 보간해 연도별 값을 반환."""
-    keys = tuple(keys)
 
     def interpolate(group: pl.DataFrame) -> pl.DataFrame:
         # 절점 연도(year)를 x로 사용 → 절점 간격(6, 10, 10년)이 반영됨.
@@ -69,17 +69,25 @@ def _pchip(data: pl.DataFrame, keys: Iterable[str]) -> pl.DataFrame:
     ).select(*keys, 'year', 'observed', 'value')
 
 
+@dataclass
+class _Command:
+    _: KW_ONLY
+    paths: Paths
+
+    @property
+    def _workspace(self):
+        return self.paths.quantity.outlook
+
+
 @app.command
 @dataclass
-class Interpolate:
+class Interpolate(_Command):
     """KEEI 전망 에너지 수요 보간."""
-
-    paths: Paths
 
     src: Path = Path('data/2026/keei.outlook.csv')
     """KEEI 전망 원자료 (wide format)."""
 
-    dst: Path = Path('data/2026/keei.outlook.01.demand.parquet')
+    dst: Path = Path('01.energy-demand.parquet')
 
     variable: str = '에너지 수요'
     start: int = 2024
@@ -126,19 +134,21 @@ class Interpolate:
             ax.legend()
             ax.set_ylim(0)
 
-        fig.savefig(self.paths.quantity.root / '01.outlook-energy-demand.png')
+        return fig
 
     def __call__(self):
-        data = self._interpolate()
-        data.write_parquet(self.dst)
-        data.write_csv(self.dst.with_suffix('.csv'), include_bom=True)
+        self._workspace.mkdir(exist_ok=True)
+        output = self._workspace / self.dst
 
-        self._plot(data)
+        data = self._interpolate()
+        data.write_parquet(output)
+        data.write_csv(output.with_suffix('.csv'), include_bom=True)
+        self._plot(data).save(output.with_suffix('.png'))
 
 
 @app.command
 @dataclass
-class Split:
+class _Split(_Command):
     """보간한 에너지 수요를 세부 용도별로 분리.
 
     서비스(비주거)는 업종별 산출액, 가정(주거)은 주택 유형별 주택 수에 비례해 배분한다.
@@ -146,15 +156,13 @@ class Split:
     모든 에너지원에 같은 비중을 적용하므로, 용도별 에너지원 구성 차이는 반영되지 않는다.
     """
 
-    paths: Paths
-
     raw: Path = Path('data/2026/keei.outlook.csv')
     """KEEI 전망 원자료 (wide format). 배분 지표를 읽는다."""
 
-    src: Path = Path('data/2026/keei.outlook.01.demand.parquet')
+    src: Path = Path('01.energy-demand.parquet')
     """보간한 에너지 수요 (`Interpolate` 결과)."""
 
-    dst: Path = Path('data/2026/keei.outlook.02.split.parquet')
+    dst: Path = Path('02.split.parquet')
 
     start: int = 2024
 
@@ -215,7 +223,7 @@ class Split:
         )
 
     def _split(self) -> pl.DataFrame:
-        demand = pl.read_parquet(self.src)
+        demand = pl.read_parquet(self._workspace / self.src)
         shares = self._shares()
 
         data = (
@@ -262,7 +270,8 @@ class Split:
 
         return data
 
-    def _plot(self, data: pl.DataFrame):
+    @staticmethod
+    def _plot(data: pl.DataFrame):
         uses = ('상업용', '교육사회용', '기타', '공동주택', '단독주택')
 
         fig, axes = uplt.subplots(nrows=2, ncols=3, sharey='limits')
@@ -286,31 +295,33 @@ class Split:
             ax.legend()
             ax.set_ylim(0)
 
-        fig.savefig(self.paths.quantity.root / '02.outlook-energy-demand-use.png')
+        return fig
 
     def __call__(self):
+        # TODO: 추후 삭제
+        warnings.warn(
+            '현재 계획상 필요하지 않음.',
+            category=DeprecationWarning,
+            stacklevel=2,
+        )
+
+        output = self._workspace / self.dst
+
         data = self._split()
-        data.write_parquet(self.dst)
-        data.write_csv(self.dst.with_suffix('.csv'), include_bom=True)
-
-        self._plot(data)
-
-        # TODO: 분할 결과 검토 필요 -- 상업용 수요 검증
+        data.write_parquet(output)
+        data.write_csv(output.with_suffix('.csv'), include_bom=True)
+        self._plot(data).save(output.with_suffix('.png'))
 
         return data
 
 
 @app.command
 @dataclass
-class Emission:
+class Emission(_Command):
     """ECO2 배출량 계수로 배출량 계산."""
 
-    paths: Paths
-
-    src: Path = Path('data/2026/keei.outlook.02.split.parquet')
-    """용도별로 분리한 에너지 수요 (`Split` 결과)."""
-
-    dst: Path = Path('data/2026/keei.outlook.03.emission.parquet')
+    src: Path = Path('01.energy-demand.parquet')
+    dst: Path = Path('02.emission.parquet')
 
     def _emission(self):
         factors = (
@@ -322,10 +333,9 @@ class Emission:
         )
         demand = (
             pl
-            .scan_parquet(self.src)
+            .scan_parquet(self._workspace / self.src)
             .select(
                 pl.col('sector').replace_strict({'서비스': '비주거', '가정': '주거'}),
-                'use',
                 pl
                 .col('group')
                 .replace_strict({
@@ -357,10 +367,11 @@ class Emission:
             .with_columns(
                 pl.col('emission_tCO2').truediv(10**6).alias('emission_MtCO2')
             )
-            .sort('sector', 'use', 'source', 'year')
+            .sort('sector', 'source', 'year')
         )
 
-    def _plot(self, data: pl.DataFrame):
+    @staticmethod
+    def _plot(data: pl.DataFrame):
         sectors = ('비주거', '주거')
         total = (
             data
@@ -391,14 +402,15 @@ class Emission:
             ax.legend()
             ax.set_ylim(0)
 
-        fig.savefig(self.paths.quantity.root / '03.outlook-emission.png')
+        return fig
 
     def __call__(self):
-        data = self._emission()
-        data.write_parquet(self.dst)
-        data.write_csv(self.dst.with_suffix('.csv'), include_bom=True)
+        output = self._workspace / self.dst
 
-        self._plot(data)
+        data = self._emission()
+        data.write_parquet(output)
+        data.write_csv(output.with_suffix('.csv'), include_bom=True)
+        self._plot(data).save(output.with_suffix('.png'))
 
         return data
 
