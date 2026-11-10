@@ -1,4 +1,5 @@
-import dataclasses as dc
+import functools
+from dataclasses import KW_ONLY, dataclass
 from itertools import chain
 from typing import TYPE_CHECKING, ClassVar
 
@@ -6,6 +7,7 @@ import eco2.report
 import polars as pl
 import polars.selectors as cs
 import structlog
+import ultraplot as uplt
 from cyclopts.config import Toml
 from tqdm.rich import tqdm
 
@@ -13,7 +15,7 @@ import zeb.emission
 import zeb.y2026.common as comm
 from zeb import utils
 from zeb.cli import App
-from zeb.y2026.common import INDEX, Grade
+from zeb.y2026.common import ELECTRIFICATION, INDEX, Electrification, Grade
 from zeb.y2026.config import Paths  # ruff:ignore[typing-only-first-party-import]
 
 if TYPE_CHECKING:
@@ -75,12 +77,15 @@ def read_raw(*, paths: Paths, batchreport: str = 'batchreport.tab'):
     return data
 
 
-@app.command
-@dc.dataclass
-class Parse:
-    _: dc.KW_ONLY
+@dataclass
+class _Command:
+    _: KW_ONLY
     paths: Paths
 
+
+@app.command
+@dataclass
+class Parse(_Command):
     INDEX: ClassVar[tuple[str, ...]] = INDEX.CASE
     AREA_FIX: ClassVar[dict[str, str]] = {
         '1878.42 // 1549.68': '1549.68',
@@ -179,11 +184,8 @@ class Parse:
 
 
 @app.command
-@dc.dataclass
-class Emission:
-    _: dc.KW_ONLY
-    paths: Paths
-
+@dataclass
+class Emission(_Command):
     INDEX: ClassVar[tuple[str, ...]] = INDEX.CASE
     SOURCE: ClassVar[dict[str, str]] = {
         '난방유(등유)': '등유',
@@ -297,6 +299,132 @@ class Emission:
         )
 
         return data
+
+
+@app.command
+@dataclass
+class Reduction(_Command):
+    """Scope별 탄소 저감량."""
+
+    # TODO: '공.A2.N.교.2' 포함 여부 결정
+
+    reference: str = 'ECO2'
+
+    # TODO: owner 포함한 물량 통계 이용 시 owner = True
+    owner: bool = False
+
+    @property
+    def output(self):
+        return self.paths.eco2.root
+
+    def emission(self):
+        c = (
+            pl.format('{}-{}-{}', 'purpose', 'scale', 'owner')
+            if self.owner
+            else pl.format('{}-{}', 'purpose', 'scale')
+        )
+
+        emission = pl.read_parquet(self.paths.eco2.root / '02.emission.parquet')
+        assert (
+            emission
+            .filter(pl.col('scope') == 'generation.heat')
+            .select((pl.col('emission') == 0).all())
+            .item()
+        )
+        return (
+            emission
+            .filter(
+                pl.col('scope') != 'generation.heat',
+                pl.col('reference') == self.reference,
+                pl.col('grade').is_in([Grade.NOPV, Grade.EXST]).not_(),
+            )
+            .group_by([*INDEX.CASE, 'scope'])
+            .agg(pl.sum('emission'))  # kg
+            .with_columns(
+                pl.col('emission').truediv(pl.col('연면적')).alias('emission'),  # kg/m²
+                pl
+                .when(pl.col('purpose').is_in(['공동주택', '단독주택']))
+                .then(pl.col('scale.c'))
+                .otherwise(pl.col('scale.a'))
+                .alias('scale'),
+            )
+            .with_columns(c.alias('case'))
+        )
+
+    @functools.cached_property
+    def reduction(self):
+        variables = ['emission', 'emission.baseline', 'reduction']
+        return (
+            self
+            .emission()
+            .with_columns(
+                # TODO: 전환 모델 비교 대상 변경
+                pl
+                .col('emission')
+                .filter(pl.col('grade') == Grade.BASE)
+                .sum()
+                .over([*INDEX.BUILDING, 'scope'])
+                .alias('emission.baseline')
+            )
+            .with_columns(
+                (pl.col('emission') - pl.col('emission.baseline')).alias('reduction')
+            )
+            .group_by('electrification', 'case', 'grade', 'scope')
+            .agg(
+                pl.col(variables).mean().name.suffix(':avg'),
+                pl.col(variables).std().name.suffix(':std'),
+            )
+            .with_columns(
+                (pl.col('reduction:avg') / pl.col('emission.baseline:avg'))
+                .fill_nan(None)
+                .alias('reduction.ratio')
+            )
+            .sort(pl.all())
+        )
+
+    def plot(self, electrification: Electrification):
+        data = (
+            (self.reduction)
+            .filter(
+                pl.col('electrification') == electrification,
+                pl.col('scope') != 'direct.generation',
+            )
+            .with_columns(
+                pl.col('scope').replace_strict({
+                    'direct': '직접',
+                    'indirect': '간접',
+                    'generation.elec': '전력 생산',
+                })
+            )
+        )
+
+        scope = ('직접', '간접', '전력 생산')
+        fig, axes = uplt.subplots(nrows=1, ncols=len(scope))
+
+        for (grade, s), sub in data.group_by('grade', 'scope', maintain_order=True):
+            ax = axes[scope.index(s)]
+            ax.scatter(sub['reduction:avg'], sub['case'], label=grade, cycle='crest')
+
+        for ax, s in zip(axes, scope, strict=True):
+            ax.format(title=s, xlabel='탄소 배출량 변화 [$kg/m^2$]', ylabel='')
+
+        axes[0].legend()
+
+        return fig
+
+    def __call__(self):
+        assert (
+            self.reduction
+            .filter(pl.col('scope') == 'direct.generation')
+            .select((pl.col('reduction:avg') == 0).all())
+            .item()
+        )
+
+        self.reduction.write_csv(self.output / '03.reduction.csv', include_bom=True)
+
+        for e in ELECTRIFICATION:
+            fig = self.plot(e)
+            fig.save(self.output / f'03.reduction_{e}.svg')
 
 
 if __name__ == '__main__':
