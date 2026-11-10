@@ -13,9 +13,10 @@ wheels/
 bin/
 .vscode/
 docs/assets/
-data/**/*.parquet
 work
+
 env.toml
-.*.toml
+
+*.parquet
 *.pdf
-*.xlsx
+*.xls[xb]
