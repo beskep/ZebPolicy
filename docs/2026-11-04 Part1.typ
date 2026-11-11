@@ -421,23 +421,23 @@ $ "전환 효과" = "기준 배출량" times "전환 비중" times "원단위 �
     [ECO2, 온실가스종합정보센터, @table:ef],
 
     [4],
-    [
-      재고 연면적 $A_"stock" (t, s)$, 10개년 평균 $A_"new" (b)$ × 재고 지수로
-      $A_"new" (t_c, b)$ 산정, 신축 비중 $r_"new" (t, b)$ 계산, 묵시적 멸실률 점검
-    ],
-    [건축HUB, KEEI, 건축물통계],
+    [재고 지수 $I_"stock" (t, s)$(@eq:stock-index), 누적 신축 연수 $n_"new" (t, s)$(@eq:n-new) 계산],
+    [KEEI, 건축물통계($c_1$ 추정)],
 
-    [5], [유형·에너지원별 원단위 보정계수 $k_"new" (t, b, f)$ 계산], [시뮬레이션, KEEI],
+    [5],
+    [10개년 평균 $A_"new" (b)$로 유형·에너지원별 신축 수요 비중 $q_"new" (t, b, f)$(@eq:q-new) 계산],
+    [건축HUB, 시뮬레이션, KEEI],
+
     [6], [유형·등급·에너지원별 변화율 $R_"grade" (b, g, f)$ 표 작성], [시뮬레이션],
     [7], [시나리오별 등급 분포 $r^p_"grade" (t_c, b, g)$ 표 작성 → $R^p_"avg" (t, b, f)$ 계산], [시나리오 표],
     [8],
     [전전화 대상 재고 $A_"elig" (2024, b)$ 산정, 전환율 $r^p_"conv/yr" (t_x, b)$ 설정
-      \ → 전환 비중 $r^p_"conv" (t, b)$ 계산],
+      \ → 누적 전환 면적 $A^p_"conv,cum" (t, b)$(@eq:conv-cum) 계산],
     [건축물대장, 에너지 사용량, 시나리오 표],
 
-    [9], [유형·에너지원별 보정 전환 변화율 $R^*_"conv" (t, b, f)$ 계산], [시뮬레이션(전환 전후), KEEI],
+    [9], [유형·에너지원별 전환 수요 비중 $q_"conv" (t, b, f)$(@eq:q-conv) 계산], [시뮬레이션(전환 전후), KEEI],
     [10],
-    [@eq:saving-new, @eq:saving-x, @eq:pv 로 에너지원별 변화량, @eq:scope 로 범위별 합산,
+    [@eq:saving-new-calc, @eq:saving-x-calc, @eq:pv-calc 로 에너지원별 변화량, @eq:scope 로 범위별 합산,
       \ 기본 시나리오와의 차이(@eq:main-ref)로 시나리오 배출량 계산],
     [—],
 
@@ -449,10 +449,11 @@ $ "전환 효과" = "기준 배출량" times "전환 비중" times "원단위 �
 연구진은 1--9단계의 결과를 입력 시트로 정리해 제공한다.
 계산 시트는 신축 시트와 전전화 시트로 나눈다.
 
-- 신축 시트: 행은 "유형 $b$ × 연도 $t$", 열은 $r_"new"$와 에너지원별 $k_"new"$, $R^p_"avg"$(6개 에너지원 + 태양광).
-  마지막 열에서 $C_"REF" times r_"new" times k_"new" times R^p_"avg"$를 곱한다.
-- 전전화 시트: 행은 "유형 $b$ × 연도 $t$", 열은 $r_"conv"$와 에너지원별 $R^*_"conv"$.
-  마지막 열에서 $C_"REF" times r^p_"conv" times R^*_"conv"$를 곱한다.
+- 신축 시트: 행은 "유형 $b$ × 연도 $t$", 열은 $n_"new"$와 에너지원별 $q_"new"$, $R^p_"avg"$(6개 에너지원 + 태양광).
+  마지막 열에서 $C_"REF" times n_"new" times q_"new" times R^p_"avg"$를 곱한다.
+- 전전화 시트: 행은 "유형 $b$ × 연도 $t$", 열은 $A^p_"conv,cum"$와 에너지원별 $q_"conv"$.
+  마지막 열에서 $C_"REF" times A^p_"conv,cum" times q_"conv"$를 곱한다.
+- 재고 연면적 $A_"stock"$은 계산 시트에 필요 없다(@section:calc-form).
 
 두 시트의 결과를 에너지원별로 더한 뒤 범위별로 합산한다.
 
@@ -467,6 +468,7 @@ $ "전환 효과" = "기준 배출량" times "전환 비중" times "원단위 �
 - *아래첨자*는 양의 역할(new, conv, grade 등)을, *위첨자 $p$*는 정책 시나리오를 나타낸다.
 - 첫 글자로 양의 종류를 구분한다.
   $r$은 비중·비율(0--1, 부호 없음), $R$은 변화율(감소 음수, 증가 양수), $k$는 보정계수(배수)이다.
+  $q$는 KEEI 에너지 수요 $Q$ 대비 비율, $n$은 연수, $I$는 기준연도 대비 지수이다.
 
 #figure(
   table(
@@ -547,6 +549,12 @@ $ "전환 효과" = "기준 배출량" times "전환 비중" times "원단위 �
     [$k_"new"$, $k_"conv"$, $k_"use"$, $k_"area"$],
     [원단위 보정(신축, 전환), 실사용 보정, 유형별 면적 보정],
     [@section:mu, @section:elec],
+
+    [$I_"stock"$], [재고 지수(2024년 = 1)], [@eq:stock-index],
+    [$n_"new"$], [재고 지수로 가중한 누적 신축 연수(년)], [@eq:n-new],
+    [$q_"new"$, $q_"conv"$],
+    [KEEI 수요 대비 신축 기준건물 연간 수요 비중(1/년), 전환 면적당 수요 변화 비중(1/m#super[2])],
+    [@eq:q-new, @eq:q-conv],
   ),
   caption: [주요 기호],
 ) <table:symbols>
@@ -629,6 +637,149 @@ $ <eq:scope>
   예를 들어 2040년 서비스부문 직접 배출(15.23 MtCO#sub[2]eq)에 변화율 $-15%$를 그대로 곱하면 $-2.28$ Mt가 된다.
   반면 신축 비중 20%, 원단위 보정 0.8을 반영하면 $-0.37$ Mt로, 크기가 약 6배 차이 난다(가상 수치).
 ]
+
+== 계산 형태: 재고 연면적을 소거한 변수 <section:calc-form>
+
+@eq:saving-new 와 @eq:saving-x 의 변수는 의미를 설명하기 쉽도록 재고 연면적 $A_"stock"$을 기준으로 정의했다.
+그러나 $A_"stock"$은 신축·전환 비중의 분모와, 재고 평균 원단위 $e_"stock" = Q \/ A_"stock"$를 거쳐 보정계수의 분자에 함께 들어가므로 곱하면 약분된다.
+
+$
+  r_"new" (t, b) dot k_"new" (t, b, f)
+  = (A_"new,cum" (t, b)) / (A_"stock" (t, s)) dot (e_"base" (b, f) dot A_"stock" (t, s)) / (Q(t, s, f))
+  = (A_"new,cum" (t, b) dot e_"base" (b, f)) / (Q(t, s, f))
+$ <eq:cancel>
+
+따라서 실제 계산에는 $A_"stock"$의 *수준*이 필요 없다.
+특히 비주거는 KEEI에 연면적 지표가 없어, $A_"stock"$을 쓰려면 결과에 쓰이지 않는 연면적을 추정해야 한다.
+계산 시트에서는 $A_"stock"$을 소거한 아래 변수를 쓴다.
+@eq:saving-new 의 $r_"new"$, $k_"new"$와 @eq:saving-x 의 $r^p_"conv"$, $R^*_"conv"$는 결과를 해석하고 설명할 때만 쓴다.
+
+=== 재고 지수 $I_"stock" (t, s)$
+
+신축 물량 A안(@eq:new-index)에는 재고의 *변화율*만 필요하다.
+이를 재고 지수로 정의하고 KEEI 자료로 직접 계산한다.
+
+$ I_"stock" (t, s) = (A_"stock" (t, s)) / (A_"stock" (2024, s)) $ <eq:stock-index>
+
+- 주거: $I_"stock" (t, "res") = (sum_h N(t, h) dot a_"unit" (t)) / (sum_h N(2024, h) dot a_"unit" (2024))$.
+  KEEI 주택 수와 평균 주거면적만 쓰며, 면적 기준(전용/연면적)은 약분된다.
+- 비주거: KEEI에 연면적 지표가 없으므로 서비스 산출액 또는 에너지 수요의 변화로 대신한다(@table:stock-index).
+
+#figure(
+  table(
+    columns: (auto, auto, auto, 1fr),
+    align: (left, left, right, left),
+    table.header([방안], [$I_"stock" (t, "nres")$], [2050년 값], [특징]),
+    [산출액 탄력성 (*권장*)],
+    [$(V_"svc" (t) \/ V_"svc" (2024))^(c_1)$],
+    [1.17 ($c_1 = 0.6$ 예시)],
+    [
+      @eq:stock-nr 의 탄력성 $c_1$만 쓰고 재고 수준은 쓰지 않는다.
+      $c_1$은 과거 건축물통계(비주거 연면적)와 산출액으로 추정한다
+    ],
+
+    [산출액 비례],
+    [$V_"svc" (t) \/ V_"svc" (2024)$],
+    [1.31],
+    [$c_1 = 1$인 경우.
+      재고 증가를 과대평가할 가능성이 크다],
+
+    [에너지 수요 비례],
+    [$sum_f Q(t, "nres", f) \/ sum_f Q(2024, "nres", f)$],
+    [1.16],
+    [
+      추가 자료가 필요 없다.
+      그러나 KEEI 수요에는 원단위 개선이 반영되어 있어, 재고 증가를 과소평가한다
+    ],
+  ),
+  caption: [비주거 재고 지수의 대안],
+) <table:stock-index>
+
+#warning[
+  서비스 산출액과 에너지 수요는 비례하지 않는다.
+  KEEI REF에서 2024년 대비 2050년 서비스 산출액은 약 31%, 서비스 에너지 수요는 약 16% 늘어난다.
+  두 지표의 선택에 따라 2050년 비주거 연간 신축 물량이 약 12% 달라지므로, 선택 근거를 밝히고 민감도 분석에 포함한다.
+]
+
+=== 신축: 누적 신축 연수 $n_"new"$와 수요 비중 $q_"new"$
+
+신축 물량 A안에서 $A_"new" (t_c, b) = A_"new" (b) dot I_"stock" (t_c - 1, s)$이므로, 누적 신축 연면적은 다음과 같다.
+
+$
+  A_"new,cum" (t, b) = A_"new" (b) dot n_"new" (t, s), quad n_"new" (t, s) = sum_(t_c = 2025)^(t) I_"stock" (t_c - 1, s)
+$ <eq:n-new>
+
+- $n_"new" (t, s)$: 재고 지수로 가중한 누적 신축 연수(년).
+  B안($I_"stock" equiv 1$)이면 $n_"new" (t, s) = t - 2024$이다.
+  부문에만 의존하므로 유형별로 따로 계산할 필요가 없다.
+
+신축 기준건물 1년분의 에너지 사용량이 KEEI 부문 수요에서 차지하는 비중을 $q_"new"$로 정의한다.
+
+$ q_"new" (t, b, f) = (A_"new" (b) dot e_"base" (b, f)) / (Q(t, s, f)) quad ["1/년"] $ <eq:q-new>
+
+그러면 @eq:cancel 에 따라 $r_"new" dot k_"new" = n_"new" dot q_"new"$이고, 신축 효과는 다음과 같다.
+
+$
+  Delta C^p_"new" (t, s, f)
+  = C_"REF" (t, s, f) dot sum_(b in cal(B)_"new" (s)) n_"new" (t, s) dot q_"new" (t, b, f) dot R^p_"avg" (t, b, f)
+$ <eq:saving-new-calc>
+
+$
+  Delta C^p_"PV" (t, s)
+  = C_"REF" (t, s, "el") dot sum_(b in cal(B)_"new" (s)) n_"new" (t, s) dot q_"new" (t, b, "el") dot R^p_"PV" (t, b)
+$ <eq:pv-calc>
+
+평균 변화율의 준공연도별 가중치(@eq:avg-rate)도 재고 수준 없이 쓸 수 있다.
+
+$ r_"cohort" (t_c, t) = (I_"stock" (t_c - 1, s)) / (n_"new" (t, s)) $ <eq:cohort-calc>
+
+=== 전전화: 전환 면적과 수요 비중 $q_"conv"$
+
+전전화는 전환 면적이 시나리오로 직접 정해지므로(@eq:conv-area), 누적 전환 면적을 그대로 쓴다.
+
+$ A^p_"conv,cum" (t, b) = sum_(t_x = 2025)^(t) A^p_"conv" (t_x, b) dot (1 - r_"demo" (s))^(t - t_x) $ <eq:conv-cum>
+
+전환 면적 1 m#super[2]당 에너지 사용량 변화가 KEEI 부문 수요에서 차지하는 비중을 $q_"conv"$로 정의한다.
+
+$ q_"conv" (t, b, f) = (e_"post" (b, f) - e_"pre" (b, f)) / (Q(t, s, f)) quad ["1/m"^2] $ <eq:q-conv>
+
+$r^p_"conv" dot R^*_"conv" = A^p_"conv,cum" dot q_"conv"$이므로, 전전화 효과는 다음과 같다.
+
+$
+  Delta C^p_"conv" (t, s, f)
+  = C_"REF" (t, s, f) dot sum_(b in cal(B)_"conv" (s)) A^p_"conv,cum" (t, b) dot q_"conv" (t, b, f)
+$ <eq:saving-x-calc>
+
+$q_"conv"$의 부호는 $R_"conv"$와 같다(연료 음수, 전력 양수).
+
+=== 정리
+
+#figure(
+  table(
+    columns: (auto, auto, auto, auto),
+    align: (left, left, left, left),
+    table.header([효과], [해석용 변수(@eq:saving-new, @eq:saving-x)], [계산용 변수], [관계]),
+    [신축], [$r_"new" (t, b) dot k_"new" (t, b, f)$], [$n_"new" (t, s) dot q_"new" (t, b, f)$], [@eq:cancel],
+    [태양광], [$r_"new" (t, b) dot k_"new" (t, b, "el")$], [$n_"new" (t, s) dot q_"new" (t, b, "el")$], [@eq:pv-calc],
+    [전전화],
+    [$r^p_"conv" (t, b) dot R^*_"conv" (t, b, f)$],
+    [$A^p_"conv,cum" (t, b) dot q_"conv" (t, b, f)$],
+    [@eq:saving-x-calc],
+  ),
+  caption: [해석용 변수와 계산용 변수의 대응],
+) <table:calc-form>
+
+- 계산용 변수에는 $A_"stock"$의 수준이 없다.
+  KEEI 자료는 $C_"REF"$와 $q$의 분모 $Q$, 재고 지수 $I_"stock"$로만 들어간다.
+- $C_"REF" dot q$에서 $Q$도 약분되므로, 결과는 상향식 계산($"면적" times "원단위" times "EF" times "변화율"$)과 같다(부록 참조).
+  곱셈식으로 쓰는 이유는 KEEI 기준 배출량 대비 비율로 결과를 해석하기 위함이다.
+- 연료 감소량 상한(@eq:conv-cap)은 계산용 변수로 다음과 같이 점검한다.
+  $
+    sum_(b in cal(B)_"new" (s)) n_"new" (t, s) q_"new" (t, b, f) R^p_"avg" (t, b, f)
+    + sum_(b in cal(B)_"conv" (s)) A^p_"conv,cum" (t, b) q_"conv" (t, b, f) >= -1
+  $
+- 묵시적 멸실률 점검(@eq:implied-delta)에는 $A_"stock"$의 수준이 필요하다.
+  주거는 KEEI 주택 수와 면적으로 계산할 수 있으나, 비주거는 연면적 추정 없이는 점검하지 않는다.
 
 = KEEI 전망값의 연도 보간 <section:interp>
 
@@ -1038,6 +1189,8 @@ $
   A_"new" (t_c, b) = A_"new" (b) dot (A_"stock" (t_c - 1, s)) / (A_"stock" (2024, s)) quad (t_c = 2025, ..., 2050)
 $ <eq:new-index>
 
+- 재고 지수 $I_"stock"$(@eq:stock-index)로 쓰면 $A_"new" (t_c, b) = A_"new" (b) dot I_"stock" (t_c - 1, s)$이다.
+  비주거 재고 지수는 @table:stock-index 의 방안으로 계산한다.
 - 연간 신축률 $r_"build" (b) = A_"new" (b) \/ A_"stock" (2024, s)$가 일정하다고 보는 것과 같다.
   즉 $A_"new" (t_c, b) = r_"build" (b) dot A_"stock" (t_c - 1, s)$이다.
 - 신축률을 과거 재고 통계로 따로 추정하면, 과거 재고(건축물통계, 연면적 기준)와 미래 재고(KEEI 기반, 주거는 전용면적 기준 추정)의 면적 기준이 달라 수준이 틀어진다.
@@ -1068,7 +1221,7 @@ $ A_"new" (t_c, b) = A_"new" (b) quad (t_c = 2025, ..., 2050) $ <eq:new-avg>
 
 === 재고 연면적 $A_"stock" (t, s)$
 
-$A_"stock" (t, s)$는 $r_"new"$와 $k_"new"$(@eq:mu)의 분모에 모두 들어가므로, 이 두 항 사이에서는 약분된다.
+$A_"stock" (t, s)$는 $r_"new"$의 분모와 $k_"new"$(@eq:mu)의 분자에 들어가므로, 이 두 항 사이에서는 약분된다.
 따라서 B안에서는 결과가 $A_"stock"$의 값에 영향을 받지 않는다.
 A안에서는 신축 물량을 정하는 재고 지수(@eq:new-index)를 통해 결과에 들어간다.
 다만 지수(비율)로만 쓰이므로 재고의 수준은 약분되고, 재고의 *변화율*만 결과에 영향을 준다.
@@ -1493,7 +1646,7 @@ $ C^p (t, s, f) = C_"REF" (t, s, f) + [Delta C^p (t, s, f) - Delta C^"기본" (t
 
 - 배출계수 방안: A안(ECO2 고정) 대 B안(국가 계수 + 전망).
   B안 안에서는 KEEI REF 대 전력수급기본계획·NDC 전원 구성
-- 신축 연면적: 재고 지수 조정(A안, 채택) 대 10개년 평균 고정(B안), 비주거 재고 탄력성 $c_1$, 평균 기간(5·10·15년)
+- 신축 연면적: 재고 지수 조정(A안, 채택) 대 10개년 평균 고정(B안), 비주거 재고 지수 방안(@table:stock-index)과 탄력성 $c_1$, 평균 기간(5·10·15년)
 - 멸실률 $r_"demo"$, 허가–준공 시차 $n_"lag"$, 성능 저하율 $R_"deg"$($-0.05$--0)
 - 실사용 보정계수 $k_"use"$(ECO2 평가값과 실사용량의 차이)
 - 신축 건물 연료 구성: 시뮬레이션 고정값과 전기화 가정 비교
