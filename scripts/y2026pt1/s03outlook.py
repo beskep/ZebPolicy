@@ -1,26 +1,21 @@
-"""에너지경제연구원 KEEI 2025 장기에너지전망 데이터 해석.
-
-보간(Interpolate) -> 세부 용도별 분리(Split) -> 탄소 배출량 추정(Emission) 순으로 실행.
-"""
+"""에너지경제연구원 KEEI 2025 장기에너지전망 데이터 해석."""
 
 import warnings
 from dataclasses import KW_ONLY, dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar
+lazy from collections.abc import Sequence
 
 import cmap
 import cyclopts
 import numpy as np
 import polars as pl
 import ultraplot as uplt
-from scipy.interpolate import PchipInterpolator
+lazy from scipy.interpolate import PchipInterpolator
 
 from zeb.cli import App
 from zeb.emission import EmissionFactors
 from zeb.y2026.config import Paths  # ruff: ignore[typing-only-first-party-import]
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
 
 app = App(
     config=cyclopts.config.Toml(
@@ -31,19 +26,21 @@ app = App(
     )
 )
 
-_CYCLE = 'tol:bright_alt'
 _SOURCE = ('전력', '지역난방', 'LNG', 'LPG', '신재생&기타', '석탄')
 _USE = ('상업용', '교육사회용', '기타', '단독주택', '공동주택')
 
 
-def _read_raw(src: Path, start: int) -> pl.DataFrame:
+def _read_raw(src: Path, start: int, *, total: bool = False) -> pl.DataFrame:
     """KEEI 원자료(wide)를 long format으로 변환."""
     return (
         pl
         .read_csv(src)
         .unpivot(index=['sector', 'variable', 'group', 'unit'], variable_name='year')
         .with_columns(pl.col('year').cast(pl.Int64))
-        .filter(pl.col('year') >= start)
+        .filter(
+            pl.col('year') >= start,
+            pl.col('group') != ('' if total else '합계'),
+        )
         .drop_nulls('value')
     )
 
@@ -63,16 +60,21 @@ def _pchip(data: pl.DataFrame, keys: Sequence[str]) -> pl.DataFrame:
             'observed': np.isin(years, x),  # 관측치(절점) 여부
         }).with_columns(pl.lit(group[k].first()).alias(k) for k in keys)
 
-    data = data.sort(*keys, 'year')
-    return pl.concat(
-        interpolate(g) for g in data.partition_by(keys, maintain_order=True)
-    ).select(*keys, 'year', 'observed', 'value')
+    return (
+        pl
+        .concat(interpolate(g) for g in data.partition_by(keys))
+        .select(*keys, 'year', 'observed', 'value')
+        .sort(*keys, 'year')
+    )
 
 
 @dataclass
 class _Command:
     _: KW_ONLY
     paths: Paths
+
+    start: int = 2024
+    """첫 절점 연도."""
 
     @property
     def _workspace(self):
@@ -81,7 +83,7 @@ class _Command:
 
 @app.command
 @dataclass
-class Interpolate(_Command):
+class InterpolateDemand(_Command):
     """KEEI 전망 에너지 수요 보간."""
 
     src: Path = Path('data/2026/keei.outlook.csv')
@@ -90,8 +92,6 @@ class Interpolate(_Command):
     dst: Path = Path('01.energy-demand.parquet')
 
     variable: str = '에너지 수요'
-    start: int = 2024
-    """첫 절점 연도."""
 
     _KEYS: ClassVar[tuple[str, ...]] = ('sector', 'variable', 'group')
 
@@ -106,7 +106,7 @@ class Interpolate(_Command):
         return (
             _pchip(data, self._KEYS)
             .with_columns(pl.col('value') * (10**6))  # 백만 toe -> toe
-            .rename({'value': 'energy_demand_toe'})
+            .rename({'value': 'energy_demand__toe'})
         )
 
     def _plot(self, data: pl.DataFrame):
@@ -118,9 +118,8 @@ class Interpolate(_Command):
             ax = axes[sectors.index(sector)]
             ax.plot(
                 sub['year'],
-                sub['energy_demand_toe'],
+                sub['energy_demand__toe'],
                 label=group,
-                cycle=_CYCLE,
                 lw=2,
                 alpha=0.8,
             )
@@ -138,6 +137,90 @@ class Interpolate(_Command):
 
     def __call__(self):
         self._workspace.mkdir(exist_ok=True)
+        output = self._workspace / self.dst
+
+        data = self._interpolate()
+        data.write_parquet(output)
+        data.write_csv(output.with_suffix('.csv'), include_bom=True)
+        self._plot(data).save(output.with_suffix('.png'))
+
+
+@app.command
+@dataclass
+class InterpolateGrowth(_Command):
+    """KEEI 전망 산출액 및 주거 면적 보간."""
+
+    src: Path = Path('data/2026/keei.outlook.csv')
+    """KEEI 전망 원자료 (wide format)."""
+
+    dst: Path = Path('01.growth.parquet')
+
+    def _interpolate(self):
+        sector = pl.col('sector')
+        var = pl.col('variable')
+        group = pl.col('group')
+        # TODO: 상업 서비스와 공공 서비스로 공공/민간 분리?
+        data = (
+            _read_raw(self.src, self.start, total=True)
+            .filter(
+                ((sector == '서비스') & (var == '에너지 수요') & (group == '합계'))
+                | (
+                    (sector == '가정')
+                    & (var == '주요지표/형태별 주택')
+                    & (group == '합계')
+                )
+                | (
+                    (sector == '가정')
+                    & (var == '주요지표')
+                    & (group == '평균 주거 면적')
+                )
+            )
+            .with_columns(pl.format('{} {}', 'group', 'unit').alias('variable'))
+            .pivot('variable', index='year', values='value')
+            .with_columns(
+                pl
+                .col('합계 백만호')
+                .mul(pl.col('평균 주거 면적 m²'))
+                .alias('주거_면적__m2'),
+            )
+            .select(
+                'year',
+                pl.col('합계 백만 toe').alias('비주거_에너지수요__toe'),
+                '주거_면적__m2',
+            )
+            .unpivot(index='year')
+        )
+        return (
+            _pchip(data, keys=['variable'])
+            .pivot(
+                'variable',
+                index=['year', 'observed'],
+                values='value',
+                sort_columns=True,
+            )
+            .sort('year')
+        )
+
+    @staticmethod
+    def _plot(data: pl.DataFrame):
+        observed = data.filter(pl.col('observed'))
+        fig, axes = uplt.subplots(nrows=2, ncols=1, refaspect=(16 * 2, 9))
+        for ax, v in zip(
+            axes, ('비주거_에너지수요__toe', '주거_면적__m2'), strict=True
+        ):
+            ax.plot(x=data['year'], y=data[v])
+            ax.scatter(x=observed['year'], y=observed[v])
+            ax.format(
+                xlabel='',
+                ylabel={
+                    '비주거_에너지수요__toe': '비주거 에너지 수요 [toe]',
+                    '주거_면적__m2': '주거 면적 [m²]',
+                }[v],
+            )
+
+        return fig
+
+    def __call__(self):
         output = self._workspace / self.dst
 
         data = self._interpolate()
@@ -281,7 +364,6 @@ class _Split(_Command):
                 sub['year'],
                 sub['energy_demand_toe'],
                 label=group,
-                cycle=_CYCLE,
                 lw=2,
                 alpha=0.8,
             )
@@ -349,7 +431,7 @@ class Emission(_Command):
                 .alias('source'),
                 'year',
                 'observed',
-                'energy_demand_toe',
+                'energy_demand__toe',
             )
             .collect()
         )
@@ -360,12 +442,12 @@ class Emission(_Command):
             .with_columns(
                 pl.col('source').cast(pl.Enum(_SOURCE)),
                 pl
-                .col('energy_demand_toe')
+                .col('energy_demand__toe')
                 .mul(pl.col('emission_factor'))
-                .alias('emission_tCO2'),
+                .alias('emission__tCO2'),
             )
             .with_columns(
-                pl.col('emission_tCO2').truediv(10**6).alias('emission_MtCO2')
+                pl.col('emission__tCO2').truediv(10**6).alias('emission__MtCO2')
             )
             .sort('sector', 'source', 'year')
         )
@@ -376,7 +458,7 @@ class Emission(_Command):
         total = (
             data
             .group_by('sector', 'source', 'year')
-            .agg(pl.col('emission_MtCO2').sum())
+            .agg(pl.col('emission__MtCO2').sum())
             .sort('sector', 'source', 'year')
         )
         fig, axes = uplt.subplots(nrows=1, ncols=2, sharey='limits')
@@ -386,9 +468,8 @@ class Emission(_Command):
             ax = axes[sectors.index(sector)]
             ax.plot(
                 sub['year'],
-                sub['emission_MtCO2'],
+                sub['emission__MtCO2'],
                 label=source,
-                cycle=_CYCLE,
                 lw=2,
                 alpha=0.8,
             )
@@ -416,5 +497,6 @@ class Emission(_Command):
 
 
 if __name__ == '__main__':
-    cmap.register_mpl(_CYCLE)
+    cmap.register_mpl('tol:bright_alt')
+    uplt.rc['mathtext.fontset'] = 'custom'
     app()
