@@ -1,5 +1,6 @@
 """에너지경제연구원 KEEI 2025 장기에너지전망 데이터 해석."""
 
+import functools
 import warnings
 from dataclasses import KW_ONLY, dataclass
 from pathlib import Path
@@ -405,6 +406,7 @@ class Emission(_Command):
     src: Path = Path('01.energy-demand.parquet')
     dst: Path = Path('02.emission.parquet')
 
+    @functools.cached_property
     def _emission(self):
         factors = (
             EmissionFactors
@@ -452,11 +454,31 @@ class Emission(_Command):
             .sort('sector', 'source', 'year')
         )
 
-    @staticmethod
-    def _plot(data: pl.DataFrame):
+    @functools.cached_property
+    def _emission_by_scope(self):
+        return (
+            self._emission
+            .with_columns(
+                pl.col('source').replace_strict(
+                    {
+                        '전력': 'indirect',
+                        '지역난방': 'indirect',
+                        'LNG': 'direct',
+                        'LPG': 'direct',
+                    },
+                    default=None,
+                )
+            )
+            .drop_nulls('source')
+            .group_by('sector', 'source', 'year', 'observed')
+            .agg(pl.sum('emission__tCO2', 'emission__MtCO2'))
+            .sort('sector', 'source', 'year')
+        )
+
+    def _plot(self):
         sectors = ('비주거', '주거')
         total = (
-            data
+            self._emission
             .group_by('sector', 'source', 'year')
             .agg(pl.col('emission__MtCO2').sum())
             .sort('sector', 'source', 'year')
@@ -488,12 +510,15 @@ class Emission(_Command):
     def __call__(self):
         output = self._workspace / self.dst
 
-        data = self._emission()
-        data.write_parquet(output)
-        data.write_csv(output.with_suffix('.csv'), include_bom=True)
-        self._plot(data).save(output.with_suffix('.png'))
+        self._emission.write_parquet(output)
+        self._emission.write_csv(output.with_suffix('.csv'), include_bom=True)
+        self._plot().save(output.with_suffix('.png'))
 
-        return data
+        self._emission_by_scope.write_csv(
+            output.parent / f'{output.stem}_scope.csv', include_bom=True
+        )
+
+        return self._emission
 
 
 if __name__ == '__main__':
