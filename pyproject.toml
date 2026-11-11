@@ -3,7 +3,7 @@ name            = "zeb"
 version         = "0.1.0"
 description     = "ZEB Policy"
 readme          = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.15"
 authors         = [{ name = "beskep", email = "beskep@naver.com" }]
 dependencies    = [
   "cyclopts>=4.16.1",
