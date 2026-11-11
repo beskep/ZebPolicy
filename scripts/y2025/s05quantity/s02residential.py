@@ -6,8 +6,8 @@ import more_itertools as mi
 import polars as pl
 import rich
 import seaborn as sns
+import structlog
 import xlsxwriter
-from loguru import logger
 from matplotlib.figure import Figure
 
 from scripts.y2025.s05quantity.common import Dirs, app
@@ -17,6 +17,8 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from matplotlib.axes import Axes
+
+logger = structlog.stdlib.get_logger()
 
 
 def _remove_m2(text: str):
@@ -339,7 +341,7 @@ class BaseEda(_Base):
     def __call__(self):
         utils.mpl.MplTheme(fig_size=self.figsize).grid().apply()
 
-        logger.info('PK unique: {}', self.raw[Var.PK.RESIDENTIAL].is_unique().all())
+        logger.info('PK unique: %s', self.raw[Var.PK.RESIDENTIAL].is_unique().all())
 
         self.count()
         self.household()
@@ -491,7 +493,7 @@ class Prep(_Base):
             .collect()
         )
         if annex.height:
-            logger.warning('99.부속건물 가구 수 존재 (shape={})', annex.shape)
+            logger.warning('99.부속건물 가구 수 존재 (shape=%s)', annex.shape)
 
         annex.write_excel(self.output('주택인허가-부속건축물-세대수존재.xlsx'))
 

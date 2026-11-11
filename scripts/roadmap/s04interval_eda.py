@@ -22,7 +22,7 @@ import pingouin as pg
 import polars as pl
 import polars.selectors as cs
 import rich
-from loguru import logger
+import structlog
 from scipy.spatial.distance import cdist
 from xlsxwriter import Workbook
 
@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from polars._typing import ColumnWidthsDefinition, FrameType
 
 
+logger = structlog.stdlib.get_logger()
 conf = Config.read()
 intrv = conf.interval_eda
 
@@ -381,7 +382,7 @@ def analyse_summarise_policy():
         ['정책구간', '면적구간', '주체'],
         ['정책구간', '건물주용도', '면적구간', '주체'],
     ]:
-        logger.info('group={}', group)
+        logger.info('group=%s', group)
         g = None if group is None else tuple(mi.always_iterable(group))
         suffix = '' if g is None else f' by {"&".join(g)}'
 
@@ -429,7 +430,7 @@ def analyse_summarise_sensitivity():
         ['건물주용도', '면적구간'],
         ['건물주용도', '면적구간', '주체'],
     ]:
-        logger.info('group={}', group)
+        logger.info('group=%s', group)
         g = None if group is None else tuple(mi.always_iterable(group))
         suffix = '' if g is None else f' by {"&".join(g)}'
 
@@ -487,7 +488,7 @@ def _anova_equipment(
             anova = _anova(df, dv=dv, between=between, ss_type=ss_type)
         except (AssertionError, ValueError) as e:
             logger.warning(
-                'ANOVA Error | group={} | by={} | dv={} | {}', group, by[0], dv, e
+                'ANOVA Error | group=%s | by=%s | dv=%s | %s', group, by[0], dv, e
             )
             yield df.select(pl.lit(by[0]).alias(group), pl.lit(dv).alias('종속변수'))
             continue
@@ -679,7 +680,7 @@ class PolicyTarget:
         drop = [s.name for s in points if s.is_null().mean() > self.max_na]  # type: ignore[operator]
 
         if self.max_na and drop:
-            logger.info('drop {}', drop)
+            logger.info('drop %s', drop)
             variables = [x for x in variables if x not in drop]
             points = points.drop(drop)
 
@@ -919,7 +920,7 @@ def policy_target_batch():
     group_vars = ['면적구간', '냉열원설비 분류', '온열원설비 분류']
 
     for count, group in product([100, 150], mi.powerset(group_vars)):
-        logger.info(f'{count=} | {group=}')
+        logger.info('count=%s | group=%s', count, group)
         policy_target(sample_count=count, sample_group=(*include, *group))
 
 
@@ -995,7 +996,7 @@ class PolicyTarget2(PolicyTarget):
         drop = [s.name for s in points if s.is_null().mean() > self.max_na]  # type: ignore[operator]
 
         if self.max_na and drop:
-            logger.info('drop {}', drop)
+            logger.info('drop %s', drop)
             variables = [x for x in variables if x not in drop]
             points = points.drop(drop)
 

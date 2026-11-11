@@ -16,9 +16,9 @@ import polars as pl
 import polars.selectors as cs
 import rich
 import seaborn as sns
+import structlog
 import xlsxwriter
 from cmap import Colormap
-from loguru import logger
 from matplotlib.figure import Figure
 from tqdm.rich import tqdm
 
@@ -32,6 +32,8 @@ if TYPE_CHECKING:
 Plot = Literal['violin', 'box', 'boxstrip']
 
 _DEFAULT_PATH = Path('[DEFAULT]')
+
+logger = structlog.stdlib.get_logger()
 
 
 class BuildingType(enum.StrEnum):

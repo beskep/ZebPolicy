@@ -11,17 +11,16 @@ import cyclopts
 import polars as pl
 import polars.selectors as cs
 import rich
+import structlog
 import xlsxwriter
-from cyclopts.types import (
-    ExistingDirectory,  # ruff:ignore[typing-only-third-party-import]
-)
-from loguru import logger
+from cyclopts.types import ExistingDirectory  # ruff:ignore[typing-only-third-party-import]
 
 from scripts.y2025.common import Grade
 from zeb import utils
 from zeb.emission import EmissionFactors
 from zeb.utils.cli import App
 
+logger = structlog.stdlib.get_logger()
 app = App(
     config=[
         cyclopts.config.Toml(
@@ -203,7 +202,7 @@ class EvaluateEmission:
             use = m.group('use')
             pv = m.group('pv')
             no_pv = 'zero' in pv
-            logger.info('use={} | NoPV={} | src={}', use, no_pv, src)
+            logger.info('use=%s | NoPV=%s | src=%s', use, no_pv, src)
 
             yield (
                 self

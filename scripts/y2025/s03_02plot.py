@@ -11,10 +11,10 @@ import cyclopts
 import matplotlib.pyplot as plt
 import polars as pl
 import seaborn as sns
+import structlog
 from cyclopts.types import (
     ExistingDirectory,  # ruff:ignore[typing-only-third-party-import]
 )
-from loguru import logger
 from matplotlib import patheffects
 from matplotlib.container import BarContainer
 from matplotlib.figure import Figure
@@ -39,6 +39,8 @@ BUILDING_USES: tuple[BuildingUse, ...] = ('residential', 'non-residential')
 PLOT_VARIABLE_TYPES: tuple[InspectVariableType, ...] = ('value', 'delta', 'ratio')
 
 CASE_PATTERN = r'(공|민)(-C\d)?-A\d-([가-힣]|\d)+-\d+'
+
+logger = structlog.stdlib.get_logger()
 
 
 class _NullError(ValueError):
@@ -443,7 +445,7 @@ class Inspect:
             try:
                 fig = self.plot(data, case=case, variables=variables)
             except _NullError:
-                logger.debug('Null case: {} var={}', case, var)
+                logger.debug('Null case: %s var=%s', case, var)
                 return
             else:
                 fig.savefig(self.output / f'{t} {name}.png')
@@ -666,7 +668,7 @@ class GroupReprEmission:
             try:
                 data, fig = self.compare(param)
             except _NullError:
-                logger.debug('Null case: {}', param)
+                logger.debug('Null case: %s', param)
                 continue
 
             data.write_excel(self.output / f'{name}.xlsx')

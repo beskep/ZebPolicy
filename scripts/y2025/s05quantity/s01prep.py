@@ -5,13 +5,15 @@ from typing import TYPE_CHECKING
 import more_itertools as mi
 import polars as pl
 import polars.selectors as cs
-from loguru import logger
+import structlog
 
 from scripts.y2025.s05quantity.common import Dirs, app
 from zeb import utils
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+logger = structlog.stdlib.get_logger()
 
 
 @app.default
@@ -119,7 +121,7 @@ class Preprocess:
             name = self._name(src.name)
             parquet = self.dirs.data / f'HUB_{name}.parquet'
             exists = parquet.exists()
-            logger.info(f'{src.stem=} | {exists=}')
+            logger.info('source', src=src.stem, exists=exists)
 
             if not exists:
                 data = self.read(src)

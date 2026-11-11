@@ -38,7 +38,6 @@ plot      = [
   "seaborn>=0.13.2",
 ]
 roadmap   = [
-  "loguru>=0.7.3",
   "pydash>=8.0.6",
   "salib>=1.5.2",
   "scikit-learn>=1.8.0",

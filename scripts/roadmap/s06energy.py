@@ -18,8 +18,8 @@ import polars as pl
 import polars.selectors as cs
 import rich
 import seaborn as sns
+import structlog
 from cmap import Colormap
-from loguru import logger
 from matplotlib.figure import Figure
 from matplotlib.layout_engine import ConstrainedLayoutEngine
 from matplotlib.ticker import MaxNLocator, StrMethodFormatter
@@ -36,6 +36,8 @@ if TYPE_CHECKING:
 
     from matplotlib.axes import Axes
     from polars._typing import FrameType
+
+logger = structlog.stdlib.get_logger()
 
 
 def _join_frames(frame: FrameType, *frames: FrameType):
@@ -143,7 +145,7 @@ class Preprocess:
 
         if (d := bldg.filter(pl.col('건축물명').is_duplicated())).height:
             logger.warning(
-                'sheet={} | duplicated buildings={}',
+                'sheet=%s | duplicated buildings=%s',
                 (sheet_id, sheet_name),
                 d.select(pl.col('건축물명').unique().sort()).to_series().to_list(),
             )
@@ -161,8 +163,8 @@ class Preprocess:
         if additional is not None:
             rich.print(additional)
             rich.print(data)
-            logger.info('building.shape={}', data.shape)
-            logger.info('energy.building.shape={}', additional.shape)
+            logger.info('building.shape=%s', data.shape)
+            logger.info('energy.building.shape=%s', additional.shape)
             data = data.join(
                 additional,
                 on=list(set(data.columns) & set(additional.columns)),
@@ -473,8 +475,8 @@ class CPR:
             model = ChangePointRegression(
                 data, temperature='T', energy='EUIadj'
             ).optimize_multi_models()
-        except CprError as e:
-            logger.warning(f'{e!r}')
+        except CprError:
+            logger.exception('CPR Error')
             return None
 
         if plot_dir is not None:
@@ -549,8 +551,8 @@ class CPR:
     def _cpr_compare(data: pl.DataFrame, ymax: float, ax: Axes | None = None):
         try:
             model = ChangePointRegression(data).optimize_multi_models()
-        except CprError as e:
-            logger.warning(f'{e!r}')
+        except CprError:
+            logger.exception('CPR Error')
             return None
 
         if ax is not None:
@@ -608,13 +610,13 @@ class CPR:
         )
 
         for idx, group in enumerate(conf.energy.cpr):
-            logger.info('group={}', group)
+            logger.info('group=%s', group)
 
             max_e = (
                 data.filter(pl.col('건축물명').is_in(group)).select(pl.max('E')).item()
             )
             for building in group:
-                logger.info('building={}', building)
+                logger.info('building=%s', building)
 
                 d = data.filter(pl.col('건축물명') == building.removeprefix(prefix))
                 if not d.height:

@@ -13,7 +13,7 @@ import polars as pl
 import polars.selectors as cs
 import rich
 import sklearn.preprocessing as skp
-from loguru import logger
+import structlog
 from scipy.spatial.distance import cdist
 from xlsxwriter import Workbook
 
@@ -21,6 +21,8 @@ from zeb import utils
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+logger = structlog.stdlib.get_logger()
 
 
 class V:
@@ -69,7 +71,7 @@ def prep(
     household_breaks: Sequence[float] = (60, 85),
 ):
     source = mi.one(root.glob('*DB.xlsx'))
-    logger.info(f'{source=}')
+    logger.info('source=%s', source)
 
     complex_labels = [f'C{i + 1}' for i in range(len(complex_breaks) + 1)]
     household_labels = [f'A{i + 1}' for i in range(len(household_breaks) + 1)]

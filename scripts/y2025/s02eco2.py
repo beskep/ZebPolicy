@@ -13,9 +13,9 @@ import polars as pl
 import polars.selectors as cs
 import rich
 import seaborn as sns
+import structlog
 from eco2 import report
 from eco2.editor import Area, Eco2Xml
-from loguru import logger
 from matplotlib.figure import Figure
 from tqdm.rich import tqdm
 
@@ -25,6 +25,8 @@ from zeb.utils.cli import App
 if TYPE_CHECKING:
     from lxml.etree import _Element
     from matplotlib.axes import Axes
+
+logger = structlog.stdlib.get_logger()
 
 
 def _dict(obj: _Element, /):
@@ -217,7 +219,7 @@ class _Eco2Xml(Eco2Xml):
         )
         value = float(self.MANUAL_CORRECTION.get(head, head))
         case = None if self.source is None else self.source.stem
-        logger.info(f'연면적 수정 {case=} | {raw=} | {value=}')
+        logger.info('연면적 수정', case=case, raw=raw, value=value)
 
         return Area(site=area.site, building=area.building, floor=value, raw=area.raw)
 
@@ -237,10 +239,10 @@ class _Eco2Xml(Eco2Xml):
         data = {}
         for zone in self.ds.iterfind('tbl_zone'):
             if (code := zone.findtext('code', 'NOT FOUND')) in data:
-                logger.warning('Duplicated zone code: {}', code)
+                logger.warning('Duplicated zone code: %s', code)
 
             if not (raw := zone.findtext('입력존의수')):
-                logger.warning(f'{code=} | count not found | element={_dict(zone)}')
+                logger.warning('Count not found', code=code, element=_dict(zone))
                 count = 0
             else:
                 count = int(raw)
@@ -258,12 +260,12 @@ class _Eco2Xml(Eco2Xml):
                 continue
 
             if not (area := face.findtext('건축부위면적')):
-                logger.warning(f'{area=} | element={_dict(face)}')
+                logger.warning('건축부위면적 미발견', area=area, element=_dict(face))
                 continue
 
             zone = face.findtext('존분류', 'NOT FOUND')
             if not (count := self.zone_count.get(zone, 0)):  # 참조되지 않는 면은 0 처리
-                logger.warning(f'{count=} not found | element={_dict(face)}')
+                logger.warning('Not found', zone=zone, count=count, element=_dict(face))
                 continue
 
             yield float(area or 0) * count

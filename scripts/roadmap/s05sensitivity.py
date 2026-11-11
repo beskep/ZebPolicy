@@ -11,9 +11,9 @@ import polars.selectors as cs
 import polars.testing
 import rich
 import seaborn as sns
+import structlog
 from cmap import Colormap
 from eco2.report import GraphReport, GraphReportRows
-from loguru import logger
 from matplotlib.layout_engine import ConstrainedLayoutEngine
 from matplotlib.ticker import MaxNLocator
 
@@ -50,6 +50,7 @@ def get_root() -> Path:
     return conf.sensitivity.root
 
 
+logger = structlog.stdlib.get_logger()
 app = App()
 
 
@@ -64,7 +65,7 @@ def check_reports(path: Path | None = None):
 
     if missing := tuple(find_missing_report()):
         for f in missing:
-            logger.warning('missing report: {}', f)
+            logger.warning('missing report: %s', f)
     else:
         logger.info('no missing report')
 
@@ -136,9 +137,8 @@ def convert(*, monthly: bool = False, sample_size: int = 100):
 
         rich.print(report.head(2))
         logger.info(
-            '{}, n_case={}',
-            subdir,
-            report.filter(pl.col('variable') == '에너지자립률(전체)').height,
+            subdir.as_posix(),
+            n_case=report.filter(pl.col('variable') == '에너지자립률(전체)').height,
         )
 
 

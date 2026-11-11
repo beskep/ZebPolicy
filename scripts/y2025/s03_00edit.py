@@ -14,11 +14,10 @@ from typing import TYPE_CHECKING, ClassVar, Literal
 import cyclopts
 import more_itertools as mi
 import polars as pl
+import structlog
 from eco2 import report
 from eco2.editor import Eco2Editor, Eco2Xml, EditorError, set_child_text
-from loguru import logger
 from lxml import etree
-from rich.logging import RichHandler
 from tqdm import TqdmExperimentalWarning
 from tqdm.rich import tqdm
 
@@ -98,6 +97,8 @@ PV_GEN_PER_AREA: dict[str, dict[Region, float]] = {
         '제주': 80.210067,
     },
 }
+
+logger = structlog.stdlib.get_logger()
 
 
 class Building(enum.StrEnum):
@@ -288,7 +289,7 @@ class Editor(Eco2Editor):
 
         if code != self.REGION_CODE[region]:
             logger.warning(
-                '{} code 불일치 {} != {}', region, code, self.REGION_CODE[region]
+                '%s code 불일치 %s != %s', region, code, self.REGION_CODE[region]
             )
 
         desc = mi.one(self.xml.iterfind('tbl_Desc'))
@@ -392,7 +393,7 @@ class Editor(Eco2Editor):
         match cooling.type:
             case 'EHP' | 'GHP':
                 if (kind := element.findtext('냉동기종류')) != '실내공조시스템':
-                    logger.warning('냉동기종류="{}"', kind)
+                    logger.warning('냉동기종류="%s"', kind)
                     return
 
                 control = self._value(
@@ -546,7 +547,7 @@ def filename(src: Path, dst: Path, *, name: bool = False):
             raise ValueError(path.name)
 
         code = m.group(1)
-        logger.info('{}: {}', code, path)
+        logger.info('%s: %s', code, path)
 
         try:
             s = mi.one(
@@ -698,8 +699,8 @@ class BatchEditor:
 
         try:
             editor.edit()
-        except EditorError as e:
-            logger.error('{} {}', case, repr(e))
+        except EditorError:
+            logger.exception(str(case))
             return
 
         editor.write(path)
@@ -726,7 +727,7 @@ def gen_per_area(editor: BatchEditor, *, area: tuple[float, ...] = (0, 10, 100))
     """PV 면적 테스트 케이스 생성."""
     cases = tuple(x for x in editor.cases() if x.grade is None)
     for case, a in itertools.product(cases, area):
-        logger.info('{} {}', case, a)
+        logger.info('%s %s', case, a)
         setting = editor.filter_setting(
             scale=case.scale, region=case.region, grade=case.grade
         )
@@ -987,18 +988,14 @@ def pv_bldg_area(root: Path, threshold: float = 0.901):
             x for x in eco.ds.iterfind('tbl_new') if x.findtext('설명') == 'PV'
         )
         if pv is None:
-            logger.info('No PV in {}', path.name)
+            logger.info('No PV in %s', path.name)
             continue
 
         pv_area = float(pv.findtext('태양광모듈면적'))
         r = pv_area / area
         if r >= threshold:
-            logger.warning('r={} | case={}', r, path.name)
+            logger.warning('r=%s | case=%s', r, path.name)
 
 
 if __name__ == '__main__':
-    logger.remove()
-    logger.add(RichHandler(log_time_format='[%X]'), level='INFO', format='{message}')
-    logger.add('carbon-reduction.log', level='WARNING')
-
     app()
