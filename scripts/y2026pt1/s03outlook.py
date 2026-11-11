@@ -10,6 +10,7 @@ lazy from collections.abc import Sequence
 import cmap
 import cyclopts
 import numpy as np
+import pint
 import polars as pl
 import ultraplot as uplt
 lazy from scipy.interpolate import PchipInterpolator
@@ -193,30 +194,30 @@ class InterpolateGrowth(_Command):
         )
         return (
             _pchip(data, keys=['variable'])
-            .pivot(
-                'variable',
-                index=['year', 'observed'],
-                values='value',
-                sort_columns=True,
+            .with_columns(
+                pl.col('variable').str.extract_groups(
+                    r'^(?<sector>주거|비주거)_(?<variable>.*)$'
+                )
             )
-            .sort('year')
+            .unnest('variable')
+            .select('sector', 'year', 'observed', 'variable', 'value')
+            .sort('sector', 'year')
         )
 
     @staticmethod
     def _plot(data: pl.DataFrame):
-        observed = data.filter(pl.col('observed'))
-        fig, axes = uplt.subplots(nrows=2, ncols=1, refaspect=(16 * 2, 9))
-        for ax, v in zip(
-            axes, ('비주거_에너지수요__toe', '주거_면적__m2'), strict=True
-        ):
-            ax.plot(x=data['year'], y=data[v])
-            ax.scatter(x=observed['year'], y=observed[v])
+        fig, axes = uplt.subplots(nrows=2, ncols=1, refaspect=(16 * 2, 9), sharey=False)
+        for ax, sector in zip(axes, ('비주거', '주거'), strict=True):
+            sub = data.filter(pl.col('sector') == sector)
+            observed = sub.filter(pl.col('observed'))
+            ax.plot(x=sub['year'], y=sub['value'])
+            ax.scatter(x=observed['year'], y=observed['value'])
             ax.format(
                 xlabel='',
                 ylabel={
-                    '비주거_에너지수요__toe': '비주거 에너지 수요 [toe]',
-                    '주거_면적__m2': '주거 면적 [m²]',
-                }[v],
+                    '비주거': '비주거 에너지 수요 [toe]',
+                    '주거': '주거 면적 [m²]',
+                }[sector],
             )
 
         return fig
@@ -406,6 +407,8 @@ class Emission(_Command):
     src: Path = Path('01.energy-demand.parquet')
     dst: Path = Path('02.emission.parquet')
 
+    demand_unit: str = 'kWh'
+
     @functools.cached_property
     def _emission(self):
         factors = (
@@ -456,6 +459,9 @@ class Emission(_Command):
 
     @functools.cached_property
     def _emission_by_scope(self):
+        ur = pint.UnitRegistry()
+        k = ur.Quantity(1.0, 'toe').to(self.demand_unit).magnitude
+        demand = f'demand__{self.demand_unit}'
         return (
             self._emission
             .with_columns(
@@ -467,11 +473,12 @@ class Emission(_Command):
                         'LPG': 'direct',
                     },
                     default=None,
-                )
+                ),
+                pl.col('energy_demand__toe').mul(k).alias(demand),
             )
             .drop_nulls('source')
             .group_by('sector', 'source', 'year', 'observed')
-            .agg(pl.sum('emission__tCO2', 'emission__MtCO2'))
+            .agg(pl.sum(demand, 'emission__MtCO2'))
             .sort('sector', 'source', 'year')
         )
 
