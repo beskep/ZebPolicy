@@ -323,8 +323,9 @@ class Reduction(_Command):
             if self.owner
             else pl.format('{}-{}', 'purpose', 'scale')
         )
-
+        gfa = pl.col('연면적')
         emission = pl.read_parquet(self.paths.eco2.root / '02.emission.parquet')
+
         assert (
             emission
             .filter(pl.col('scope') == 'generation.heat')
@@ -334,14 +335,17 @@ class Reduction(_Command):
         return (
             emission
             .filter(
-                pl.col('scope') != 'generation.heat',
                 pl.col('reference') == self.reference,
                 pl.col('grade').is_in([Grade.NOPV, Grade.EXST]).not_(),
             )
-            .group_by([*INDEX.CASE, 'scope'])
-            .agg(pl.sum('emission'))  # kg
             .with_columns(
-                pl.col('emission').truediv(pl.col('연면적')).alias('emission'),  # kg/m²
+                pl.col('scope').replace({'generation.elec': 'generation'}),
+                pl.col('delivered').truediv(gfa).alias('delivered'),  # kWh/m²
+                pl.col('emission').truediv(gfa).alias('emission'),  # kg/m²
+            )
+            .group_by([*INDEX.CASE, 'scope'])
+            .agg(pl.sum('delivered', 'emission'))
+            .with_columns(
                 pl
                 .when(pl.col('purpose').is_in(['공동주택', '단독주택']))
                 .then(pl.col('scale.c'))
@@ -353,21 +357,29 @@ class Reduction(_Command):
 
     @functools.cached_property
     def reduction(self):
-        variables = ['emission', 'emission.baseline', 'reduction']
-        return (
+        variables = ['e', 'e.baseline', 'e.reduction', 'c', 'c.baseline', 'c.reduction']
+        data = (
             self
             .emission()
+            .rename({'delivered': 'e', 'emission': 'c'})
             .with_columns(
                 # TODO: 전환 모델 비교 대상 변경
                 pl
-                .col('emission')
+                .col('e')
                 .filter(pl.col('grade') == Grade.BASE)
                 .sum()
                 .over([*INDEX.BUILDING, 'scope'])
-                .alias('emission.baseline')
+                .alias('e.baseline'),
+                pl
+                .col('c')
+                .filter(pl.col('grade') == Grade.BASE)
+                .sum()
+                .over([*INDEX.BUILDING, 'scope'])
+                .alias('c.baseline'),
             )
             .with_columns(
-                (pl.col('emission') - pl.col('emission.baseline')).alias('reduction')
+                (pl.col('e') - pl.col('e.baseline')).alias('e.reduction'),
+                (pl.col('c') - pl.col('c.baseline')).alias('c.reduction'),
             )
             .group_by('electrification', 'case', 'grade', 'scope')
             .agg(
@@ -375,25 +387,29 @@ class Reduction(_Command):
                 pl.col(variables).std().name.suffix(':std'),
             )
             .with_columns(
-                (pl.col('reduction:avg') / pl.col('emission.baseline:avg'))
+                (pl.col('c.reduction:avg') / pl.col('c.baseline:avg'))
                 .fill_nan(None)
-                .alias('reduction.ratio')
+                .alias('c.ratio')
             )
             .sort(pl.all())
         )
+        assert (
+            data
+            .filter(pl.col('scope') == 'generation.heat')
+            .select((pl.col('c.reduction:avg') == 0).all())
+            .item()
+        )
+        return data.filter(pl.col('scope') != 'generation.heat')
 
     def plot(self, electrification: Electrification):
         data = (
             (self.reduction)
-            .filter(
-                pl.col('electrification') == electrification,
-                pl.col('scope') != 'direct.generation',
-            )
+            .filter(pl.col('electrification') == electrification)
             .with_columns(
                 pl.col('scope').replace_strict({
                     'direct': '직접',
                     'indirect': '간접',
-                    'generation.elec': '전력 생산',
+                    'generation': '전력 생산',
                 })
             )
         )
@@ -403,7 +419,7 @@ class Reduction(_Command):
 
         for (grade, s), sub in data.group_by('grade', 'scope', maintain_order=True):
             ax = axes[scope.index(s)]
-            ax.scatter(sub['reduction:avg'], sub['case'], label=grade, cycle='crest')
+            ax.scatter(sub['c.reduction:avg'], sub['case'], label=grade, cycle='crest')
 
         for ax, s in zip(axes, scope, strict=True):
             ax.format(title=s, xlabel='탄소 배출량 변화 [$kg/m^2$]', ylabel='')
@@ -413,14 +429,20 @@ class Reduction(_Command):
         return fig
 
     def __call__(self):
-        assert (
-            self.reduction
-            .filter(pl.col('scope') == 'direct.generation')
-            .select((pl.col('reduction:avg') == 0).all())
-            .item()
-        )
-
         self.reduction.write_csv(self.output / '03.reduction.csv', include_bom=True)
+        (
+            self.reduction
+            .select(
+                'electrification',
+                'case',
+                'grade',
+                'scope',
+                pl.col('e.baseline:avg').alias('Base소요량__kWh/m2'),
+                pl.col('c.ratio').alias('배출량변화율'),
+            )
+            .sort(pl.all())
+            .write_csv(self.output / '03.reduction_table.csv', include_bom=True)
+        )
 
         for e in ELECTRIFICATION:
             fig = self.plot(e)
