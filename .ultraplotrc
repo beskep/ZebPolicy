@@ -1,8 +1,6 @@
 # ultraplot settings
 cycle:                tol:bright_alt
-legend.borderaxespad: 1
-legend.edgecolor:     0.6
-legend.fontsize:      small
+meta.color:           0.1
 subplots.refwidth:    8cm
 tick.dir:             in
 
@@ -10,6 +8,12 @@ tick.dir:             in
 font.family:          sans-serif
 font.serif:           Noto Sans Serif, Source Han Serif KR, DejaVu Serif
 font.sans-serif:      Noto Sans KR, Source Han Sans KR, DejaVu Sans
-
 mathtext.fontset:     cm
 mathtext.default:     normal
+
+axes.edgecolor:       0.2
+xtick.color:          0.2
+ytick.color:          0.2
+legend.borderaxespad: 1
+legend.edgecolor:     0.75
+legend.fontsize:      small

@@ -18,13 +18,13 @@ grid.alpha: 0.6
 
 xtick.top:           True
 xtick.minor.visible: True
-xtick.color:         0.25
+xtick.color:         0.2
 xtick.labelcolor:    0
 xtick.direction:     in
 
 ytick.right:         True
 ytick.minor.visible: True
-ytick.color:         0.25
+ytick.color:         0.2
 ytick.labelcolor:    0
 ytick.direction:     in
 
