@@ -1,13 +1,14 @@
 import functools
 from dataclasses import KW_ONLY, dataclass
 from itertools import chain
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar
+lazy from collections.abc import Sequence
+lazy from pathlib import Path
 
 import eco2.report
 import polars as pl
 import polars.selectors as cs
 import structlog
-import ultraplot as uplt
 from cyclopts.config import Toml
 from tqdm.rich import tqdm
 
@@ -15,11 +16,8 @@ import zeb.emission
 import zeb.y2026.common as comm
 from zeb import utils
 from zeb.cli import App
-from zeb.y2026.common import ELECTRIFICATION, INDEX, Electrification, Grade
-from zeb.y2026.config import Paths  # ruff:ignore[typing-only-first-party-import]
-
-if TYPE_CHECKING:
-    from pathlib import Path
+from zeb.y2026.common import INDEX, Grade
+lazy from zeb.y2026.config import Paths
 
 app = App(
     config=Toml(
@@ -303,8 +301,8 @@ class Emission(_Command):
 
 @app.command
 @dataclass
-class Reduction(_Command):
-    """Scope별 탄소 저감량."""
+class ChangeRate(_Command):
+    """시나리오 평가를 위한 배출량 변화율 평가."""
 
     # TODO: '공.A2.N.교.2' 포함 여부 결정
 
@@ -317,6 +315,7 @@ class Reduction(_Command):
     def output(self):
         return self.paths.eco2.root
 
+    @functools.cached_property
     def emission(self):
         c = (
             pl.format('{}-{}-{}', 'purpose', 'scale', 'owner')
@@ -332,18 +331,20 @@ class Reduction(_Command):
             .select((pl.col('emission') == 0).all())
             .item()
         )
+
         return (
             emission
             .filter(
                 pl.col('reference') == self.reference,
                 pl.col('grade').is_in([Grade.NOPV, Grade.EXST]).not_(),
+                pl.col('scope') != 'generation.heat',
             )
             .with_columns(
-                pl.col('scope').replace({'generation.elec': 'generation'}),
+                pl.col('scope').replace({'generation.elec': 'PV'}),
                 pl.col('delivered').truediv(gfa).alias('delivered'),  # kWh/m²
                 pl.col('emission').truediv(gfa).alias('emission'),  # kg/m²
             )
-            .group_by([*INDEX.CASE, 'scope'])
+            .group_by([*INDEX.CASE, 'source', 'scope'])
             .agg(pl.sum('delivered', 'emission'))
             .with_columns(
                 pl
@@ -355,98 +356,60 @@ class Reduction(_Command):
             .with_columns(c.alias('case'))
         )
 
+    @staticmethod
+    def _baseline(v: str, group: Sequence[str]):
+        return pl.col(v).filter(pl.col('grade') == Grade.BASE).sum().over(group)
+
     @functools.cached_property
-    def reduction(self):
-        variables = ['e', 'e.baseline', 'e.reduction', 'c', 'c.baseline', 'c.reduction']
-        data = (
-            self
-            .emission()
-            .rename({'delivered': 'e', 'emission': 'c'})
+    def rate(self):
+        variables = [
+            'delivered',
+            'emission',
+            'delivered.baseline',
+            'emission.baseline',
+            'emission.baseline_scope',
+        ]
+
+        # NOTE: 전력 소요량과 PV 발전량 모두 합한 값을 분모로 둠
+        # 즉, baseline 계산 시 scope 부호(indirect, PV)를 구분하지 않음
+        group = [*INDEX.BUILDING, 'source']
+
+        return (
+            self.emission
             .with_columns(
                 # TODO: 전환 모델 비교 대상 변경
-                pl
-                .col('e')
-                .filter(pl.col('grade') == Grade.BASE)
-                .sum()
-                .over([*INDEX.BUILDING, 'scope'])
-                .alias('e.baseline'),
-                pl
-                .col('c')
-                .filter(pl.col('grade') == Grade.BASE)
-                .sum()
-                .over([*INDEX.BUILDING, 'scope'])
-                .alias('c.baseline'),
+                self._baseline('delivered', group).alias('delivered.baseline'),
+                self._baseline('emission', group).alias('emission.baseline'),
+                # 전력 소요, 발전량 구분
+                self._baseline('emission', [*group, 'scope']).alias(
+                    'emission.baseline_scope'
+                ),
             )
+            .group_by('electrification', 'case', 'grade', 'source', 'scope')
+            .agg(pl.col(variables).mean(), pl.col(variables).std().name.suffix(':std'))
             .with_columns(
-                (pl.col('e') - pl.col('e.baseline')).alias('e.reduction'),
-                (pl.col('c') - pl.col('c.baseline')).alias('c.reduction'),
-            )
-            .group_by('electrification', 'case', 'grade', 'scope')
-            .agg(
-                pl.col(variables).mean().name.suffix(':avg'),
-                pl.col(variables).std().name.suffix(':std'),
-            )
-            .with_columns(
-                (pl.col('c.reduction:avg') / pl.col('c.baseline:avg'))
-                .fill_nan(None)
-                .alias('c.ratio')
+                (pl.col('emission') - pl.col('emission.baseline_scope'))
+                .truediv(pl.col('emission.baseline'))
+                .fill_nan(0)
+                .alias('emission_change_rate')
             )
             .sort(pl.all())
         )
-        assert (
-            data
-            .filter(pl.col('scope') == 'generation.heat')
-            .select((pl.col('c.reduction:avg') == 0).all())
-            .item()
-        )
-        return data.filter(pl.col('scope') != 'generation.heat')
-
-    def plot(self, electrification: Electrification):
-        data = (
-            (self.reduction)
-            .filter(pl.col('electrification') == electrification)
-            .with_columns(
-                pl.col('scope').replace_strict({
-                    'direct': '직접',
-                    'indirect': '간접',
-                    'generation': '전력 생산',
-                })
-            )
-        )
-
-        scope = ('직접', '간접', '전력 생산')
-        fig, axes = uplt.subplots(nrows=1, ncols=len(scope))
-
-        for (grade, s), sub in data.group_by('grade', 'scope', maintain_order=True):
-            ax = axes[scope.index(s)]
-            ax.scatter(sub['c.reduction:avg'], sub['case'], label=grade, cycle='crest')
-
-        for ax, s in zip(axes, scope, strict=True):
-            ax.format(title=s, xlabel='탄소 배출량 변화 [$kg/m^2$]', ylabel='')
-
-        axes[0].legend()
-
-        return fig
 
     def __call__(self):
-        self.reduction.write_csv(self.output / '03.reduction.csv', include_bom=True)
-        (
-            self.reduction
-            .select(
-                'electrification',
-                'case',
-                'grade',
-                'scope',
-                pl.col('e.baseline:avg').alias('Base소요량__kWh/m2'),
-                pl.col('c.ratio').alias('배출량변화율'),
-            )
-            .sort(pl.all())
-            .write_csv(self.output / '03.reduction_table.csv', include_bom=True)
+        cols = [
+            'electrification',
+            'case',
+            'grade',
+            'source',
+            'scope',
+            pl.col('delivered.baseline').alias('delivered_baseline__kWh/m2'),
+            'emission_change_rate',
+        ]
+        self.rate.write_csv(self.output / '03.change-rate.csv', include_bom=True)
+        self.rate.select(cols).write_csv(
+            self.output / '03.change-rate_table.csv', include_bom=True
         )
-
-        for e in ELECTRIFICATION:
-            fig = self.plot(e)
-            fig.save(self.output / f'03.reduction_{e}.svg')
 
 
 if __name__ == '__main__':
