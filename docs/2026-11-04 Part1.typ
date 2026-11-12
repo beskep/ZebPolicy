@@ -41,6 +41,10 @@
   show figure: set block(above: 2em, below: 2em)
   show figure.where(kind: table): set figure.caption(position: top)
   show figure.where(kind: table): set align(start)
+  show figure.caption: it => par(first-line-indent: 0em)[
+    *#it.supplement #context it.counter.display(it.numbering).*
+    #it.body
+  ]
 
   show table: booktabs
   show table: set par(justify: false)
