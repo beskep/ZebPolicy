@@ -40,6 +40,8 @@ _KEEI2ECO2 = {
     '석탄': '석탄',  # NOTE: 가정 부문 미량 존재 -- 무시
 }
 
+_TOE2KWH = pint.UnitRegistry().Quantity(1.0, 'toe').to('kWh').magnitude
+
 
 def _read_raw(src: Path, start: int, *, total: bool = False) -> pl.DataFrame:
     """KEEI 원자료(wide)를 long format으로 변환."""
@@ -118,6 +120,9 @@ class InterpolateDemand(_Command):
             _pchip(data, self._KEYS)
             .with_columns(pl.col('value') * (10**6))  # 백만 toe -> toe
             .rename({'value': 'energy_demand__toe'})
+            .with_columns(
+                pl.col('energy_demand__toe').mul(_TOE2KWH).alias('energy_demand__kWh')
+            )
         )
 
     def _plot(self, data: pl.DataFrame):
@@ -416,13 +421,11 @@ class Emission(_Command):
     src: Path = Path('01.energy-demand.parquet')
     dst: Path = Path('02.emission.parquet')
 
-    demand_unit: str = 'kWh'
-
     @functools.cached_property
     def _emission(self):
         factors = (
             EmissionFactors
-            .read(unit='tonne/toe')
+            .read(unit='tonne/kWh')
             .dataframe()
             .filter(pl.col('reference') == 'ECO2')
             .drop('reference')
@@ -436,6 +439,7 @@ class Emission(_Command):
                 'year',
                 'observed',
                 'energy_demand__toe',
+                pl.col('energy_demand__toe').mul(_TOE2KWH).alias('energy_demand__kWh'),
             )
             .collect()
         )
@@ -446,7 +450,7 @@ class Emission(_Command):
             .with_columns(
                 pl.col('source').cast(pl.Enum(_SOURCE)),
                 pl
-                .col('energy_demand__toe')
+                .col('energy_demand__kWh')
                 .mul(pl.col('emission_factor'))
                 .alias('emission__tCO2'),
             )
@@ -458,9 +462,6 @@ class Emission(_Command):
 
     @functools.cached_property
     def _emission_by_scope(self):
-        ur = pint.UnitRegistry()
-        k = ur.Quantity(1.0, 'toe').to(self.demand_unit).magnitude
-        demand = f'demand__{self.demand_unit}'
         return (
             self._emission
             .with_columns(
@@ -473,11 +474,10 @@ class Emission(_Command):
                     },
                     default=None,
                 ),
-                pl.col('energy_demand__toe').mul(k).alias(demand),
             )
             .drop_nulls('source')
             .group_by('sector', 'source', 'year', 'observed')
-            .agg(pl.sum(demand, 'emission__MtCO2'))
+            .agg(pl.sum('energy_demand__kWh', 'emission__MtCO2'))
             .sort('sector', 'source', 'year')
         )
 
