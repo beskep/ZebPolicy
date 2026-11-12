@@ -31,6 +31,15 @@ app = App(
 _SOURCE = ('전력', '지역난방', 'LNG', 'LPG', '신재생&기타', '석탄')
 _USE = ('상업용', '교육사회용', '기타', '단독주택', '공동주택')
 
+_KEEI2ECO2 = {
+    '전기': '전력',
+    '지역난방': '지역난방',
+    '석유': 'LPG',
+    '도시가스': 'LNG',
+    '신재생&기타': '신재생&기타',  # NOTE: PV는 이 값 대신 전력과 대조 -- 무시
+    '석탄': '석탄',  # NOTE: 가정 부문 미량 존재 -- 무시
+}
+
 
 def _read_raw(src: Path, start: int, *, total: bool = False) -> pl.DataFrame:
     """KEEI 원자료(wide)를 long format으로 변환."""
@@ -423,17 +432,7 @@ class Emission(_Command):
             .scan_parquet(self._workspace / self.src)
             .select(
                 pl.col('sector').replace_strict({'서비스': '비주거', '가정': '주거'}),
-                pl
-                .col('group')
-                .replace_strict({
-                    '전기': '전력',
-                    '지역난방': '지역난방',
-                    '신재생&기타': '신재생&기타',
-                    '석탄': '석탄',  # NOTE: 가정 부문 미량 존재 -- 무시
-                    '석유': 'LPG',
-                    '도시가스': 'LNG',
-                })
-                .alias('source'),
+                pl.col('group').replace_strict(_KEEI2ECO2).alias('source'),
                 'year',
                 'observed',
                 'energy_demand__toe',
