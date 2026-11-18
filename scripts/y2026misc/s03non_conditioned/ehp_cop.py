@@ -14,8 +14,8 @@ EHP_COP.
   HQ열 : 냉방효율
 """
 
-from pathlib import Path  # ruff: ignore[typing-only-standard-library-import]
 from typing import Literal
+lazy from pathlib import Path
 
 import cyclopts
 import matplotlib.pyplot as plt
@@ -149,7 +149,8 @@ def eda(
     print('난방효율 백분율 제거 후 shape:', filtered.shape)
 
     stats_df = filtered.select(COP).describe(
-        percentiles=(0.1, 0.25, 0.5, 0.75, 0.9), interpolation='linear'
+        percentiles=(0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 0.99),
+        interpolation='linear',
     )
     stats_df.write_csv(
         root / f'난방_냉방_효율_기본통계_{heating_type}.csv', include_bom=True
@@ -177,7 +178,7 @@ def eda(
     ax = fig.subplots()
 
     sns.boxplot(
-        data=melted,
+        data=melted.to_dict(),
         x='COP',
         y='contents',
         hue='contents',
