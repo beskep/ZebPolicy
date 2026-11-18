@@ -1,8 +1,11 @@
+"""www.hub.go.kr 데이터 해석."""
+
 import functools
 import itertools
 import re
 from dataclasses import KW_ONLY, dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
+lazy from pathlib import Path
 
 import cyclopts
 import matplotlib.pyplot as plt
@@ -17,10 +20,7 @@ from matplotlib.figure import Figure
 
 from zeb import utils
 from zeb.cli import App
-from zeb.y2026.config import Paths  # ruff: ignore[typing-only-first-party-import]
-
-if TYPE_CHECKING:
-    from pathlib import Path
+lazy from zeb.y2026.config import Paths
 
 app = App(
     config=cyclopts.config.Toml(
