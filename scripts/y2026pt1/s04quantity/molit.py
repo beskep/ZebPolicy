@@ -14,15 +14,65 @@ lazy from pathlib import Path
 import cyclopts
 import fastexcel
 import polars as pl
-import rich
+import seaborn as sns
 import structlog
+from matplotlib.figure import Figure
 from tqdm.rich import tqdm
+lazy import rich
+lazy from matplotlib.axes import Axes
 
 from zeb.cli import App
+lazy from zeb.y2026.common import Owner, Purpose
 lazy from zeb.y2026.config import Paths
 
 Stat = Literal['착공', '준공']
 STAT: tuple[Stat, Stat] = ('착공', '준공')
+
+OWNER_MAP: dict[str, Owner | Literal['기타']] = {
+    '개인': '민간',
+    '일반법인': '민간',
+    '주택조합': '민간',
+    '주택업체': '민간',
+    'LH': '공공',
+    '지방공사': '공공',
+    '정부투자기관': '공공',
+    '지방자치단체': '공공',
+    '국가기관': '공공',
+    '기타': '기타',
+}
+PURPOSE_MAP: dict[str, Purpose] = {
+    '단독주택': '단독주택',
+    '공동주택': '공동주택',
+    '제1종근린생활시설': '상업',
+    '제2종근린생활시설': '상업',
+    '문화및집회시설': '교육사회',
+    '종교시설': '교육사회',
+    '판매시설': '상업',
+    '운수시설': '상업',
+    '의료시설': '교육사회',
+    '교육연구시설': '교육사회',
+    '노유자시설': '교육사회',
+    '수련시설': '교육사회',
+    '운동시설': '교육사회',
+    '업무시설': '상업',
+    '숙박시설': '상업',
+    '위락시설': '상업',
+    '공장': '기타',
+    '창고시설': '기타',
+    '위험물저장및처리시설': '상업',
+    '자동차관련시설': '상업',
+    '동.식물 관련시설': '기타',
+    '분뇨.쓰레기처리시설': '기타',  # -> 자원순환관련시설
+    '교정및군사시설': '기타',
+    '방송통신시설': '기타',
+    '발전시설': '기타',
+    '묘지관련시설': '교육사회',
+    '관광휴게시설': '교육사회',
+    '장례식장': '교육사회',
+    '자원순환관련시설': '기타',
+    '장례시설': '교육사회',
+    '야영장시설': '상업',
+}
 
 app = App(
     config=cyclopts.config.Toml(
@@ -113,7 +163,8 @@ class MolitData:
             for x, y, c in zip(h1, h2, category, strict=True)
         ]
         dtypes: dict = {
-            h: 'float' if c else 'string' for h, c in zip(header, category, strict=True)
+            h: ('string' if c else 'float')
+            for h, c in zip(header, category, strict=True)
         }
 
         data = self._load_sheet(header_row=hr + 1, dtypes=dtypes).to_polars()
@@ -161,7 +212,10 @@ class Parse(_Command):
 
 @app.command
 @dataclass
-class Inspect(_Command):
+class Summary(_Command):
+    years: tuple[int, int] = (2015, 2025)
+    check_duplicate: bool = False
+
     def _source(self, stat: Stat):
         return self.paths.data / f'00.MOLIT.{stat}.parquet'
 
@@ -182,9 +236,87 @@ class Inspect(_Command):
             logger.warning('Duplicated dates', stat=stat)
             rich.print(dup.select('source', 'date', '계'))
 
+    def _process(self, stat: Stat):
+        return (
+            pl
+            .scan_parquet(self._source(stat))
+            .filter(pl.col('시도명') == '총계', pl.col('용도별') != '계')
+            .with_columns(pl.col('용도별').replace_strict(PURPOSE_MAP).alias('purpose'))
+            .rename({'구분': 'variable'})
+            .unpivot(
+                list(OWNER_MAP),
+                index=['date', 'purpose', 'variable'],
+                variable_name='owner',
+            )
+            .with_columns(pl.col('owner').replace_strict(OWNER_MAP))
+            .group_by('date', 'purpose', 'owner', 'variable')
+            .agg(pl.sum('value'))
+            .sort(pl.all())
+            .collect()
+        )
+
+    @staticmethod
+    def plot(data: pl.DataFrame, stat: str):
+        fig = Figure(figsize=(32, 18, 'cm'))
+        axes = fig.subplots(2, 1, squeeze=False, sharey=False)
+
+        ax: Axes
+        for ax, v in zip(axes.ravel(), ('동수', '연면적'), strict=True):
+            sns.lineplot(
+                data.filter(pl.col('variable') == v).to_dict(),
+                x='date',
+                y='value',
+                hue='purpose',
+                style='owner',
+                ax=ax,
+            )
+
+            unit = '[m²]' if v == '연면적' else ''
+            ax.set_xlabel('')
+            ax.set_ylabel(f'{stat} {v}{unit}')
+
+        return fig
+
+    def _summarize(self, data: pl.DataFrame):
+        index = ['purpose', 'owner', 'variable']
+        data = (
+            data
+            .with_columns(pl.col('date').dt.year().alias('year'))
+            .group_by('year', *index, maintain_order=True)
+            .agg(pl.sum('value'))
+        )
+
+        filtered = data.filter(pl.col('year').is_between(*self.years, closed='left'))
+        avg = filtered.group_by(index, maintain_order=True).agg(pl.mean('value'))
+        years = filtered.select(min=pl.min('year'), max=pl.max('year')).row()
+        avg = avg.select(pl.lit('{}~{}'.format(*years)).alias('year'), pl.all())
+
+        return (
+            pl
+            .concat(
+                [avg, data.with_columns(pl.col('year').cast(pl.String))],
+            )
+            .pivot(
+                'variable',
+                index=['year', 'purpose', 'owner'],
+                values='value',
+                sort_columns=True,
+            )
+            .rename({'purpose': '용도', 'owner': '건축주', '연면적': '연면적 [m²]'})
+        )
+
     def __call__(self):
         for stat in STAT:
-            self._check_duplicate(stat)
+            if self.check_duplicate:
+                self._check_duplicate(stat)
+
+            data = self._process(stat)
+            data.write_parquet(self.paths.data / f'01.MOLIT.{stat}.parquet')
+            self.plot(data, stat).savefig(self.paths.eda / f'MOLIT.{stat}.png')
+
+            self._summarize(data).write_csv(
+                self.paths.eda / f'MOLIT.{stat}.csv', include_bom=True
+            )
 
 
 if __name__ == '__main__':
