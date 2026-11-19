@@ -118,6 +118,7 @@ def eda(
     figsize: tuple[float, float]
     | tuple[float, float, Literal['in', 'cm', 'px']]
     | None = (16, 8, 'cm'),
+    lower: str = '5%',
 ):
     df = read(src)
 
@@ -157,7 +158,7 @@ def eda(
     )
     print('기본통계:', stats_df)
 
-    # 하위 10%, 평균 dictionary
+    # 하위 분위수, 평균 dictionary
     stats = (
         (stats_df)
         .rename(dict(zip(COP, ('heating', 'cooling'), strict=True)))
@@ -201,7 +202,7 @@ def eda(
     ax.set_xlabel('COP')
 
     ax.scatter(
-        [stats['10%']['heating'], stats['10%']['cooling']],
+        [stats[lower]['heating'], stats[lower]['cooling']],
         [0, 1],
         color='darkred',
         marker='o',
@@ -210,17 +211,17 @@ def eda(
     )
 
     ax.text(
-        stats['10%']['heating'],
+        stats[lower]['heating'],
         0.08,
-        f'Bottom 10%: {stats["10%"]["heating"]:.2f}',
+        f'Bottom 5%: {stats["5%"]["heating"]:.2f}',
         color='darkred',
         ha='center',
         va='top',
     )
     ax.text(
-        stats['10%']['cooling'],
+        stats[lower]['cooling'],
         1.08,
-        f'Bottom 10%: {stats["10%"]["cooling"]:.2f}',
+        f'Bottom 5%: {stats["5%"]["cooling"]:.2f}',
         color='darkred',
         ha='center',
         va='top',
