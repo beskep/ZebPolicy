@@ -92,6 +92,11 @@ class _Command:
     _: KW_ONLY
     _paths: Paths
 
+    _by_use: ClassVar[pl.Expr] = pl.all_horizontal(
+        pl.col('시도명').eq('총계'),
+        pl.col('용도별').ne('계'),
+    )
+
     @property
     def paths(self):
         return self._paths.quantity
@@ -206,14 +211,9 @@ class Parse(_Command):
 class Filter(_Command):
     # 같은 연월의 데이터 중 자료기준일(reference_date)이 나중인 행 선택
 
-    @staticmethod
-    def _filter(path: Path):
-        raw = (
-            pl
-            .scan_parquet(path)
-            .filter(pl.col('시도명') == '총계', pl.col('용도별') != '계')
-            .collect()
-        )
+    @classmethod
+    def _filter(cls, path: Path):
+        raw = pl.scan_parquet(path).filter(cls._by_use).collect()
 
         dates = raw.select('source', 'date', 'reference_date').unique()
         if not dates.filter(pl.col('date').is_duplicated()).height:
@@ -270,7 +270,7 @@ class Summary(_Command):
         return (
             pl
             .scan_parquet(self.paths.data / f'MOLIT.01.{stat}.parquet')
-            .filter(pl.col('시도명') == '총계', pl.col('용도별') != '계')
+            .filter(self._by_use)
             .with_columns(pl.col('용도별').replace_strict(PURPOSE_MAP).alias('purpose'))
             .rename({'구분': 'variable'})
             .unpivot(
@@ -348,6 +348,38 @@ class Summary(_Command):
             self._summarize(data).write_csv(
                 self.paths.eda / f'MOLIT.{stat}.summary.csv', include_bom=True
             )
+
+
+@app.command
+@dataclass
+class OwnerRatio(Summary):
+    """최근 10년 유형별 공공/민간 연면적 비율(기타 유형은 무시)."""
+
+    years: tuple[int, int] = (2015, 2025)
+
+    def __call__(self):
+        data = (
+            self
+            ._process('착공')
+            .filter(pl.col('variable') == '연면적')
+            .group_by('purpose', 'owner')
+            .agg(pl.sum('value'))
+            .pivot('owner', index='purpose', values='value')
+            .with_columns(
+                pl
+                .col('공공')
+                .truediv(pl.sum_horizontal('공공', '민간'))
+                .alias('ratio.public'),
+                pl
+                .col('기타')
+                .truediv(pl.sum_horizontal('공공', '민간', '기타'))
+                .alias('ratio.etc'),
+            )
+        )
+
+        data.write_csv(self.paths.eda / 'MOLIT.ownership.csv', include_bom=True)
+
+        return data
 
 
 if __name__ == '__main__':
