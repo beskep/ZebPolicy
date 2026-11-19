@@ -7,6 +7,7 @@ https://www.index.go.kr/unity/potal/main/EachDtlPageDetail.do?idx_cd=1224
 
 import functools
 import re
+import shutil
 from dataclasses import KW_ONLY, dataclass
 from typing import ClassVar, Literal
 lazy from pathlib import Path
@@ -14,6 +15,7 @@ lazy from pathlib import Path
 import cyclopts
 import fastexcel
 import polars as pl
+import polars.selectors as cs
 import seaborn as sns
 import structlog
 from matplotlib.figure import Figure
@@ -174,6 +176,7 @@ class MolitData:
 
     def __call__(self):
         return self._data().select(
+            pl.lit(self.src.name).alias('source'),
             self._date().alias('date'),
             self._reference_date().alias('reference_date'),
             pl.all(),
@@ -193,21 +196,70 @@ class Parse(_Command):
         )
 
     def __call__(self):
-        index = ['date', '시도명', '용도별', '용도별(상세)', '구분']
-
         for stat in STAT:
             logger.info(stat)
 
             data = self.read(stat)
-            data.write_parquet(self.paths.data / f'00.MOLIT.{stat}.raw.parquet')
+            data.write_parquet(self.paths.data / f'MOLIT.00.{stat}.parquet')
 
-            # 같은 연월의 데이터 중 자료기준일(reference_date)이 나중인 행 선택
-            (
-                data
-                .group_by(index, maintain_order=True)
-                .agg(pl.all().sort_by('reference_date', nulls_last=False).last())
-                .write_parquet(self.paths.data / f'00.MOLIT.{stat}.parquet')
+
+@app.command
+class Filter(_Command):
+    # 같은 연월의 데이터 중 자료기준일(reference_date)이 나중인 행 선택
+
+    @staticmethod
+    def _filter(path: Path):
+        raw = (
+            pl
+            .scan_parquet(path)
+            .filter(pl.col('시도명') == '총계', pl.col('용도별') != '계')
+            .collect()
+        )
+
+        dates = raw.select('source', 'date', 'reference_date').unique()
+        if not dates.filter(pl.col('date').is_duplicated()).height:
+            return raw, None
+
+        recent = dates.group_by('date').agg(
+            pl.all().sort_by('reference_date', nulls_last=False).last()
+        )
+        filtered = recent.select('source').join(raw, on='source', how='inner')
+
+        return raw, filtered
+
+    def _main(self, stat: Stat):
+        logger.info(stat)
+        src = self.paths.data / f'MOLIT.00.{stat}.parquet'
+        dst = self.paths.data / f'MOLIT.01.{stat}.parquet'
+        raw, filtered = self._filter(src)
+
+        if filtered is None:
+            logger.info('Not filtered')
+            shutil.copy2(src, dst)
+            data = raw
+        else:
+            logger.info('height', raw=raw.height, filtered=filtered.height)
+            filtered.write_parquet(dst)
+            data = filtered
+
+        (
+            data
+            .describe(interpolation='linear')
+            .unpivot(index='statistic')
+            .pivot('statistic', index='variable', values='value')
+            .write_csv(self.paths.eda / f'MOLIT.{stat}.describe.csv', include_bom=True)
+        )
+
+        if (negative := data.filter(pl.any_horizontal(cs.float() < 0))).height:
+            logger.warning('Negative value')
+            negative.write_csv(
+                self.paths.eda / f'MOLIT.{stat}.negative.csv', include_bom=True
             )
+            rich.print(negative)
+
+    def __call__(self):
+        for stat in STAT:
+            self._main(stat)
 
 
 @app.command
@@ -216,30 +268,10 @@ class Summary(_Command):
     years: tuple[int, int] = (2015, 2025)
     check_duplicate: bool = False
 
-    def _source(self, stat: Stat):
-        return self.paths.data / f'00.MOLIT.{stat}.parquet'
-
-    def _check_duplicate(self, stat: Stat):
-        dup = (
-            pl
-            .scan_parquet(self._source(stat))
-            .filter(
-                pl.col('시도명') == '총계',
-                pl.col('용도별') == '계',
-                pl.col('구분') == '연면적',
-            )
-            .filter(pl.col('date').is_duplicated())
-            .collect()
-        )
-
-        if dup.height:
-            logger.warning('Duplicated dates', stat=stat)
-            rich.print(dup.select('source', 'date', '계'))
-
     def _process(self, stat: Stat):
         return (
             pl
-            .scan_parquet(self._source(stat))
+            .scan_parquet(self.paths.data / f'MOLIT.01.{stat}.parquet')
             .filter(pl.col('시도명') == '총계', pl.col('용도별') != '계')
             .with_columns(pl.col('용도별').replace_strict(PURPOSE_MAP).alias('purpose'))
             .rename({'구분': 'variable'})
@@ -307,15 +339,10 @@ class Summary(_Command):
 
     def __call__(self):
         for stat in STAT:
-            if self.check_duplicate:
-                self._check_duplicate(stat)
-
             data = self._process(stat)
-            data.write_parquet(self.paths.data / f'01.MOLIT.{stat}.parquet')
-            self.plot(data, stat).savefig(self.paths.eda / f'MOLIT.{stat}.png')
-
+            self.plot(data, stat).savefig(self.paths.eda / f'MOLIT.{stat}.summary.png')
             self._summarize(data).write_csv(
-                self.paths.eda / f'MOLIT.{stat}.csv', include_bom=True
+                self.paths.eda / f'MOLIT.{stat}.summary.csv', include_bom=True
             )
 
 
