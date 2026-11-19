@@ -105,7 +105,9 @@ class MolitData:
     REF: ClassVar[re.Pattern] = re.compile(
         r'자료기준일\s?:\s?(\d{4})\.(\d{1,2})\.(\d{1,2})'
     )
-    DATE: ClassVar[re.Pattern] = re.compile(r'^(\d+)년_?(\d+)월.*')
+    DATE: ClassVar[re.Pattern] = re.compile(
+        r'^(?P<year>\d{4})(년_?|\.)?(?P<month>\d{1,2})[월\.\+].*'
+    )
 
     @functools.cached_property
     def _reader(self):
@@ -139,10 +141,10 @@ class MolitData:
         )
 
     def _date(self):
-        if not (m := re.match(r'^(\d+)년_?(\d+)월.*', self.src.name)):
+        if not (m := self.DATE.match(self.src.name)):
             return pl.lit(None, dtype=pl.Date)
 
-        return pl.date(year=int(m.group(1)), month=int(m.group(2)), day=1)
+        return pl.date(year=int(m.group('year')), month=int(m.group('month')), day=1)
 
     def _data(self):
         raw = self._load_sheet(n_rows=0)
@@ -179,8 +181,12 @@ class MolitData:
 @app.command
 @dataclass
 class Parse(_Command):
+    source: Literal['molit', 'index'] = 'molit'
+    # stat.molit.go.kr 또는 www.index.go.kr 자료 폴더 -- 결과 비슷함
+
     def read(self, stat: Stat):
-        source = list(self.paths.raw.joinpath('molit').glob(f'*{stat}*.xls'))
+        ref = {'molit': 'molit', 'index': 'index.go.kr'}[self.source]
+        source = list(self.paths.raw.joinpath(ref).glob(f'*{stat}*.xls'))
         sheet = f'주체별({stat})'
 
         return pl.concat(
