@@ -111,9 +111,14 @@ class Parse(_Command):
         # │   ├── mart_kcy_02.txt
         # │   └── meta.tsv
         # └── memo.md
-        _, schema = cls.columns(path)
-        p = mi.one(path.glob('*.txt'))
-        return pl.read_csv(p, separator='|', quote_char=None, schema=schema)
+        columns, schema = cls.columns(path)
+        column_map = {f'column_{i}': x for i, x in enumerate(columns)}
+        schema_map = {k: schema[v] for k, v in column_map.items()}
+
+        src = mi.one(path.glob('*.txt'))
+        return pl.read_csv(
+            src, has_header=False, separator='|', quote_char=None, schema=schema_map
+        ).rename(column_map)
 
     def sample(
         self,
@@ -150,12 +155,12 @@ class Parse(_Command):
     def __call__(self):
         self.paths.data.mkdir(exist_ok=True)
 
-        for src in self.paths.raw.glob('*'):
+        for src in self.paths.raw.glob('국토교통부_*'):
             if not src.is_dir():
                 continue
 
             name = self._name(src.name)
-            parquet = self.paths.data / f'00.{name}.parquet'
+            parquet = self.paths.data / f'ArcHUB.00.{name}.parquet'
             logger.info('parsing', data=name)
 
             if parquet.exists():
