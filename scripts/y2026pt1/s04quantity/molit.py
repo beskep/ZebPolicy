@@ -265,7 +265,6 @@ class Filter(_Command):
 @dataclass
 class Summary(_Command):
     years: tuple[int, int] = (2015, 2025)
-    check_duplicate: bool = False
 
     def _process(self, stat: Stat):
         return (
@@ -288,13 +287,19 @@ class Summary(_Command):
 
     @staticmethod
     def plot(data: pl.DataFrame, stat: str):
+        agg = (
+            (data)
+            .group_by([pl.col('date').dt.year(), 'purpose', 'owner', 'variable'])
+            .agg(pl.sum('value'))
+        )
+
         fig = Figure(figsize=(32, 18, 'cm'))
         axes = fig.subplots(2, 1, squeeze=False, sharey=False)
 
         ax: Axes
         for ax, v in zip(axes.ravel(), ('동수', '연면적'), strict=True):
             sns.lineplot(
-                data.filter(pl.col('variable') == v).to_dict(),
+                agg.filter(pl.col('variable') == v).to_dict(),
                 x='date',
                 y='value',
                 hue='purpose',
