@@ -111,29 +111,22 @@ class MolitData:
     def _reader(self):
         return fastexcel.read_excel(self.src)
 
-    def _reference_pattern(self):
-        if '목차' not in self._reader.sheet_names:
-            return None
-
-        cols: tuple[str, ...] = (
-            self._reader
-            .load_sheet('목차', dtypes='string')
-            .to_polars()
-            .select(pl.all().str.join(' '))
-            .row()
-        )
-
-        for col in cols:
-            if m := self.REF.search(col):
-                return m
-
-        return None
-
     def _reference_date(self):
-        if not (m := self._reference_pattern()):
-            return pl.lit(None, dtype=pl.Date)
+        try:
+            index = ' '.join(
+                self._reader
+                .load_sheet('목차', dtypes='string')
+                .to_polars()
+                .select(pl.all().str.join(' '))
+                .row()
+            )
+        except fastexcel.SheetNotFoundError:
+            index = None
 
-        return pl.date(*(int(m.group(x)) for x in [1, 2, 3]))
+        if index and (m := self.REF.search(index)):
+            return pl.date(*(int(m.group(x)) for x in [1, 2, 3]))
+
+        return pl.lit(None, dtype=pl.Date)
 
     def _load_sheet(
         self,
