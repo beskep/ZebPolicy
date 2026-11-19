@@ -8,18 +8,18 @@ from typing import Literal
 lazy from pathlib import Path
 
 import cyclopts
-import matplotlib.pyplot as plt
 import more_itertools as mi
 import polars as pl
 import polars.selectors as cs
-import rich
-import seaborn as sns
 import structlog
-from cmap import Colormap
 from matplotlib.figure import Figure
+lazy import cmap
+lazy import matplotlib.pyplot as plt
+lazy import rich
+lazy import seaborn as sns
 
-from zeb import utils
 from zeb.cli import App
+lazy from zeb import utils
 lazy from zeb.y2026.config import Paths
 
 app = App(
@@ -32,8 +32,8 @@ app = App(
 )
 logger = structlog.stdlib.get_logger()
 
-
-VARIABLES = {
+# 건축인허가 자료 변수
+ARCH_VARIABLES = {
     '관리_허가대장_PK': 'pk',
     '건물_명': 'bldg',
     '사용승인_일': 'date',
@@ -160,7 +160,7 @@ class Parse(_Command):
                 continue
 
             name = self._name(src.name)
-            parquet = self.paths.data / f'ArcHUB.00.{name}.parquet'
+            parquet = self.paths.data / f'ArchHub.00.{name}.parquet'
             logger.info('parsing', data=name)
 
             if parquet.exists():
@@ -179,16 +179,16 @@ class Prep(_Command):
 
     # FIXME: 민간/공공 구분 불가, 전용면적 불명
 
-    years: tuple[int, int] = (2016, 2025)
+    years: tuple[int, int] = (2015, 2025)
 
     def read(self):
-        src = mi.one(self.paths.data.glob('00.*.parquet'))
+        src = mi.one(self.paths.data.glob('ArchHub.00.건축인허가_기본개요*.parquet'))
         return (
             pl
             .scan_parquet(src)
             .filter(pl.col('건축_구분_코드_명') == '신축')
-            .rename(VARIABLES)
-            .select(list(VARIABLES.values()))
+            .rename(ARCH_VARIABLES)
+            .select(list(ARCH_VARIABLES.values()))
             .with_columns(
                 pl.col('date').str.strip_chars().str.to_date('%Y%m%d', strict=False)
             )
@@ -196,14 +196,15 @@ class Prep(_Command):
         )
 
     def write(self, data: pl.DataFrame):
-        data.write_parquet(self.paths.data / '01.data.parquet')
+        stem = 'ArchHub.01.data'
+        data.write_parquet(self.paths.data / f'{stem}.parquet')
 
         data = data.drop_nulls('date')
         sample = data.sample(10000, seed=42).sort('pk')
-        sample.write_csv(self.paths.data / '01.data.sample.csv', include_bom=True)
+        sample.write_csv(self.paths.data / f'{stem}.sample.csv', include_bom=True)
         (
             self.paths.data
-            .joinpath('01.data.glimpse.txt')
+            .joinpath(f'{stem}.glimpse.txt')
             .joinpath()
             .write_text(data.glimpse(return_type='string'))
         )
@@ -214,7 +215,7 @@ class Prep(_Command):
             .unique()
             .drop_nulls('use.code')
             .sort('use.code')
-            .write_csv(self.paths.data / '01.data.use.csv', include_bom=True)
+            .write_csv(self.paths.data / f'{stem}.use.csv', include_bom=True)
         )
 
     def __call__(self):
@@ -233,11 +234,11 @@ class Prep(_Command):
         )
 
         use = pl.read_csv('data/2026/use.csv')
-        columns = [*VARIABLES.values(), 'scale.a', 'scale.c']
+        columns = [*ARCH_VARIABLES.values(), 'scale.a', 'scale.c']
         data = (
             data
             .filter(
-                pl.col('date').dt.year().is_between(*self.years)
+                pl.col('date').dt.year().is_between(*self.years, closed='left')
                 | pl.col('date').is_null()
             )
             .rename({'use': 'use.raw'})
@@ -272,9 +273,17 @@ class Prep(_Command):
 class EDA(_Command):
     fmt: Literal['svg', 'png'] = 'svg'
 
+    cmap: str = 'cmasher:ocean'
+
     @property
     def lf(self):
-        return pl.scan_parquet(self.paths.data / '01.data.parquet')
+        return pl.scan_parquet(self.paths.data / 'ArchHUB.01.data.parquet')
+
+    @functools.cached_property
+    def output(self):
+        d = self.paths.eda / 'ArchHUB'
+        d.mkdir(exist_ok=True)
+        return d
 
     @functools.cached_property
     def data(self):
@@ -282,17 +291,17 @@ class EDA(_Command):
             self.lf.drop_nulls('date').with_columns(pl.col('gfa') / 1000000).collect()
         )
 
-    @functools.cached_property
-    def cmap(self):
-        return Colormap('cmasher:ocean').to_mpl()
-
     def _units(self, xscale: str | None = 'symlog'):
-        data = self.data.unpivot(cs.starts_with('unit.'), index='use').with_columns(
-            pl.col('variable').replace_strict({
-                'unit.strata': '세대',
-                'unit.room': '호',
-                'unit.household': '가구',
-            })
+        data = (
+            (self.data)
+            .unpivot(cs.starts_with('unit.'), index='use')
+            .with_columns(
+                pl.col('variable').replace_strict({
+                    'unit.strata': '세대',
+                    'unit.room': '호',
+                    'unit.household': '가구',
+                })
+            )
         )
 
         if xscale == 'log':
@@ -324,7 +333,7 @@ class EDA(_Command):
             .add_legend(title='')
         )
         utils.mpl.move_grid_legend(grid)
-        grid.figure.savefig(self.paths.eda / f'01.units.{xscale}.{self.fmt}')
+        grid.figure.savefig(self.output / f'01.units.{xscale}.{self.fmt}')
 
     def _heatmap(
         self,
@@ -384,8 +393,7 @@ class EDA(_Command):
         ax.set_ylabel('')
 
         u = 'raw' if raw else 'use'
-        path = self.paths.eda / f'02.{x}.{v}.{u}.{self.fmt}'
-        fig.savefig(path)
+        fig.savefig(self.output / f'02.{x}.{v}.{u}.{self.fmt}')
 
     def _apartment(self):
         return (
@@ -393,7 +401,7 @@ class EDA(_Command):
         )
 
     def __call__(self):
-        self.paths.eda.mkdir(exist_ok=True)
+        cmap.register_mpl(self.cmap)
 
         self._units('symlog')
         self._units('log')
@@ -404,9 +412,7 @@ class EDA(_Command):
             logger.info('heatmap', x=x, v=v, r=r)
             self._heatmap(x, v, raw=r)
 
-        self._apartment().write_csv(
-            self.paths.eda / '03.apartment.csv', include_bom=True
-        )
+        self._apartment().write_csv(self.output / '03.apartment.csv', include_bom=True)
 
 
 @app.command
@@ -433,7 +439,7 @@ class Area(_Command):
     def data(self):
         lf = (
             pl
-            .scan_parquet(self.paths.data / '01.data.parquet')
+            .scan_parquet(self.paths.data / 'ArchHub.01.data.parquet')
             .drop_nulls('date')
             .with_columns(pl.col('date').dt.year().alias('year'))
         )
