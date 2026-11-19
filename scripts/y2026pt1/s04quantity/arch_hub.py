@@ -33,10 +33,11 @@ app = App(
 logger = structlog.stdlib.get_logger()
 
 # 건축인허가 자료 변수
-ARCH_VARIABLES = {
+ARCH_VARS = {
     '관리_허가대장_PK': 'pk',
     '건물_명': 'bldg',
     '사용승인_일': 'date',
+    '주_건축물_수': 'bldg.count',
     '주_용도_코드': 'use.code',
     '주_용도_코드_명': 'use',
     '연면적(㎡)': 'gfa',
@@ -174,7 +175,7 @@ class Parse(_Command):
 
 @app.command
 @dataclass
-class Prep(_Command):
+class ArchPrep(_Command):
     """데이터 전처리 - 날짜 해석 및 변수 추출."""
 
     # FIXME: 민간/공공 구분 불가, 전용면적 불명
@@ -187,8 +188,8 @@ class Prep(_Command):
             pl
             .scan_parquet(src)
             .filter(pl.col('건축_구분_코드_명') == '신축')
-            .rename(ARCH_VARIABLES)
-            .select(list(ARCH_VARIABLES.values()))
+            .rename(ARCH_VARS)
+            .select(list(ARCH_VARS.values()))
             .with_columns(
                 pl.col('date').str.strip_chars().str.to_date('%Y%m%d', strict=False)
             )
@@ -198,6 +199,11 @@ class Prep(_Command):
     def write(self, data: pl.DataFrame):
         stem = 'ArchHub.01.data'
         data.write_parquet(self.paths.data / f'{stem}.parquet')
+
+        data.describe(
+            percentiles=(0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 0.99),
+            interpolation='linear',
+        ).write_csv(self.paths.data / f'{stem}.describe.csv', include_bom=True)
 
         data = data.drop_nulls('date')
         sample = data.sample(10000, seed=42).sort('pk')
@@ -234,7 +240,7 @@ class Prep(_Command):
         )
 
         use = pl.read_csv('data/2026/use.csv')
-        columns = [*ARCH_VARIABLES.values(), 'scale.a', 'scale.c']
+        columns = [*ARCH_VARS.values(), 'scale.a', 'scale.c']
         data = (
             data
             .filter(
@@ -244,6 +250,12 @@ class Prep(_Command):
             .rename({'use': 'use.raw'})
             .drop_nulls(['use.code', 'use.raw'])
             .join(use, on=['use.code', 'use.raw'], how='left', validate='m:1')
+            .with_columns(
+                pl
+                .col('unit.strata')
+                .mul(pl.col('bldg.count'))
+                .alias('unit.strata_units')
+            )
             .with_columns(
                 pl
                 .col('gfa')
@@ -259,6 +271,13 @@ class Prep(_Command):
                     labels=[f'C{x}' for x in range(5)],
                 )
                 .alias('scale.c'),
+                pl
+                .col('unit.strata_units')
+                .bin_intervals(
+                    [1e-8, 300, 500, 1000],
+                    labels=[f'C{x}' for x in range(5)],
+                )
+                .alias('scale.c.units'),
             )
             .select(*columns, pl.all().exclude(columns))
         )
@@ -270,7 +289,7 @@ class Prep(_Command):
 
 @app.command
 @dataclass
-class EDA(_Command):
+class ArchEDA(_Command):
     fmt: Literal['svg', 'png'] = 'svg'
 
     cmap: str = 'cmasher:ocean'
@@ -298,6 +317,7 @@ class EDA(_Command):
             .with_columns(
                 pl.col('variable').replace_strict({
                     'unit.strata': '세대',
+                    'unit.strata_units': '세대×주건물 수',  # ruff: ignore[ambiguous-unicode-character-string]
                     'unit.room': '호',
                     'unit.household': '가구',
                 })
@@ -337,12 +357,17 @@ class EDA(_Command):
 
     def _heatmap(
         self,
-        x: Literal['year', 'area', 'strata'],
+        x: Literal['year', 'area', 'strata', 'strata_units'],
         v: Literal['count', 'gfa'],
         *,
         raw: bool = False,
     ):
-        xvar = {'year': 'year', 'area': 'scale.a', 'strata': 'scale.c'}[x]
+        xvar = {
+            'year': 'year',
+            'area': 'scale.a',
+            'strata': 'scale.c',
+            'strata_units': 'scale.c.units',
+        }[x]
 
         with plt.rc_context({
             'axes.grid': False,
@@ -407,7 +432,7 @@ class EDA(_Command):
         self._units('log')
 
         for x, v, r in itertools.product(
-            ('year', 'area', 'strata'), ('count', 'gfa'), (False, True)
+            ('year', 'area', 'strata', 'strata_units'), ('count', 'gfa'), (False, True)
         ):
             logger.info('heatmap', x=x, v=v, r=r)
             self._heatmap(x, v, raw=r)
