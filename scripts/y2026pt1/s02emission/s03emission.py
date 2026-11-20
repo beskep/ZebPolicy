@@ -307,9 +307,7 @@ class ChangeRate(_Command):
     # TODO: '공.A2.N.교.2' 포함 여부 결정
 
     reference: str = 'ECO2'
-
-    # TODO: owner 포함한 물량 통계 이용 시 owner = True
-    owner: bool = False
+    owner: bool = True  # owner 구분 여부
 
     @property
     def output(self):

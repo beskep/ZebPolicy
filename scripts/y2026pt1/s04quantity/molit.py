@@ -355,8 +355,6 @@ class Summary(_Command):
 class OwnerRatio(Summary):
     """최근 10년 유형별 공공/민간 연면적 비율(기타 유형은 무시)."""
 
-    years: tuple[int, int] = (2015, 2025)
-
     def __call__(self):
         data = (
             self
